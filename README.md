@@ -99,7 +99,9 @@ Phase 4: Testing & Evaluation
 11. แผนบริหารความเสี่ยง (Risk Management)
 ได้ข้อมูลไม่ครบ - ใช้เทคนิค Data Augmentation และขอข้อมูลจากหลายหน่วยงาน
 โมเดลแม่นยำไม่เพียงพอ  - ปรับปรุงคุณภาพการติดป้ายกำกับข้อมูล (Labeling) และใช้ Human-in-the-Loop Feedback ในการปรับปรุงโมเดล
+เวลาไม่เพียงพอ - ปรับขอบเขตุให้น้อยลง
 ข้อจำกัดทางกฎหมาย - ทำ Anonymization ข้อมูลอย่างเคร่งครัดและจัดทำข้อตกลงการใช้ข้อมูล
+งบประมาณไม่พอ - เปลี่ยนไปใช้แบบ Free tier/Open source
 12. เครื่องมือและเทคโนโลยีที่จะใช้ (Tools & Technologies)
 Python, PyTorch, TensorFlow
 FastAPI, Node.js (สำหรับ API Gateway)
