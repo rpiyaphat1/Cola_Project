@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IEP Chatbot พร้อมระบบ Login (ปรับปรุง RAG Card)</title>
+    <style>
+        /* --- General Reset & Body Styles --- */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f2f5;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* --- Login Styles (คงไว้) --- */
+        #loginPage {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+            max-width: 550px;
+            width: 90%;
+            text-align: left;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        #loginPage h2 {
+            grid-column: 1 / span 2;
+            color: #1f4e79;
+            margin-bottom: 25px;
+            text-align: center;
+            font-size: 1.8em;
+        }
+
+        /* สไตล์สำหรับการแสดงสิทธิ์การใช้งาน */
+        .auth-info-box {
+            grid-column: 1 / span 2;
+            background-color: #e6f7ff;
+            border-left: 5px solid #5b9bd5;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .auth-info-box p {
+            font-weight: bold;
+            color: #1f4e79;
+            margin-top: 0;
+        }
+
+        .auth-info-box ul {
+            list-style: none;
+            padding: 0;
+            margin: 10px 0 0 0;
+        }
+
+        .auth-info-box li {
+            margin-bottom: 8px;
+            padding: 5px 0;
+            border-bottom: 1px dotted #a0c4e1;
+            font-size: 0.95em;
+        }
+
+        .auth-info-box li:last-child {
+            border-bottom: none;
+        }
+
+        /* จัด Input และ Button ให้อยู่ใน Grid ที่สมดุล */
+        .input-group {
+            grid-column: 1 / span 2;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        #loginPage label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #444;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 5px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+
+        #loginButton {
+            grid-column: 1 / span 2;
+            padding: 15px;
+            margin-top: 15px;
+            background-color: #5b9bd5;
+            color: white;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        #loginButton:hover {
+            background-color: #4472c4;
+        }
+
+        /* --- Main App Styles --- */
+        #mainApp {
+            display: none;
+            width: 95%;
+            max-width: 1400px;
+            background-color: #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 20px;
+        }
+
+        .container {
+            display: flex;
+            min-height: 90vh;
+        }
+
+        .panel {
+            padding: 30px;
+            flex: 1;
+        }
+
+        .admin-panel {
+            background-color: #e6f7ff;
+            border-right: 1px solid #cceeff;
+            max-width: 450px;
+            /* เพิ่มความกว้าง Admin Panel ให้ Card มีพื้นที่ */
+        }
+
+        .user-panel {
+            background-color: #ffffff;
+            flex: 2;
+        }
+
+        h3 {
+            border-bottom: 2px solid #5b9bd5;
+            padding-bottom: 10px;
+            color: #1f4e79;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+
+        textarea,
+        button {
+            width: 95%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            box-sizing: border-box;
+        }
+
+        .chat-box {
+            height: 60vh;
+            overflow-y: auto;
+            padding: 15px;
+            border: 1px solid #eee;
+            background-color: #ffffff;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            border-radius: 20px;
+            max-width: 80%;
+            word-wrap: break-word;
+            line-height: 1.5;
+        }
+
+        .user-msg {
+            background-color: #d9e9f9;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+        }
+
+        .ai-msg {
+            background-color: #e2f0d9;
+            margin-right: auto;
+            border-bottom-left-radius: 5px;
+        }
+
+        /* --- RAG Card Styles (ใหม่) --- */
+        .rag-data-display {
+            /* ลบสไตล์เส้นประออก */
+            padding: 0;
+            border: none;
+            margin-top: 25px;
+            font-size: 0.85em;
+            background-color: transparent;
+        }
+
+        .rag-data-display>div {
+            max-height: 40vh;
+            /* จำกัดความสูงของรายการ RAG */
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .rag-card {
+            background-color: #ffffff;
+            border: 1px solid #cceeff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            /* เพิ่มระยะห่างระหว่าง Card */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .rag-card-header {
+            font-weight: bold;
+            color: #1f4e79;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+            margin-bottom: 10px;
+        }
+
+        .rag-card-content {
+            white-space: pre-wrap;
+            /* เพื่อให้ข้อความแผนการสอนแสดงผลตามที่ป้อน */
+        }
+
+        .rag-card-actions {
+            margin-top: 15px;
+            text-align: right;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+
+        /* --- ปุ่มลบ (สำหรับ Card) --- */
+        .delete-btn {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            /* ขนาดปุ่มที่เหมาะสม */
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+            transition: background-color 0.3s;
+            width: auto;
+        }
+
+        .delete-btn:hover {
+            background-color: #d32f2f;
+        }
+
+        #logoutButton {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background-color: #f44336;
+            width: auto;
+            padding: 8px 15px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            z-index: 100;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="loginPage">
+        <h2>🔑 เข้าสู่ระบบ Chatbot IEP</h2>
+
+        <div class="auth-info-box">
+            <p>สิทธิ์การใช้งาน (Credentials):</p>
+            <ul>
+                <li>**Admin (เพิ่มข้อมูล RAG):** username: <b>admin</b> | password: <b>admin1234</b></li>
+                <li>**User (ครู):** username: <b>user</b> | password: <b>1111</b></li>
+            </ul>
+        </div>
+
+        <div class="input-group">
+            <label for="loginUsername">Username:</label>
+            <input type="text" id="loginUsername" placeholder="admin หรือ user">
+        </div>
+
+        <div class="input-group">
+            <label for="loginPassword">Password:</label>
+            <input type="password" id="loginPassword" placeholder="รหัสผ่าน">
+        </div>
+
+        <button id="loginButton" onclick="login()">เข้าสู่ระบบ</button>
+        <p id="loginMessage" style="color: #f44336; margin-top: 5px; text-align: center;"></p>
+    </div>
+
+    <div id="mainApp">
+        <button id="logoutButton" onclick="logout()">ออกจากระบบ</button>
+        <div class="container">
+
+            <div class="panel admin-panel" id="adminPanel">
+                <h3>🛠️ Admin: ป้อนข้อมูลความรู้ (RAG Data)</h3>
+                <p>กรุณาป้อน 'คำสำคัญ' (อาการ/ความต้องการ) และ 'แผนการสอน' ที่สอดคล้อง</p>
+
+                <label for="keyword">คำสำคัญ (Keyword):</label>
+                <input type="text" id="keyword" placeholder="เช่น สื่อสารด้วยท่าทาง, ไม่สบตา, กล้ามเนื้อมืออ่อนแอ">
+
+                <label for="lessonPlan">แผนการสอน (IEP/กิจกรรม):</label>
+                <textarea id="lessonPlan" rows="5"
+                    placeholder="เช่น [กิจกรรม: ทักษะการสื่อสาร] ฝึกใช้บัตรภาพ 10 นาที, [เป้าหมาย: กายภาพ] ใช้กรรไกรตัดกระดาษ 5 ครั้ง"></textarea>
+
+                <button onclick="addRAGData()">➕ เพิ่มข้อมูล RAG</button>
+
+                <div class="rag-data-display">
+                    <p style="font-weight: bold; margin-bottom: 10px;">คลังข้อมูล RAG ปัจจุบัน:</p>
+                    <div id="ragDataList">
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel user-panel" id="chatbotPanel">
+                <h3>🤖 Chatbot: จัดแผนการศึกษาเฉพาะบุคคล</h3>
+                <div id="userInfoDisplay" style="margin-bottom: 20px; font-weight: bold; color: #4472c4;"></div>
+
+                <div class="chat-box" id="chatBox">
+                    <div class="message ai-msg">สวัสดีครับ! กรุณาป้อนข้อมูลการประเมิน หรืออาการของเด็ก เพื่อให้ AI
+                        ช่วยแนะนำแผน IEP ที่เหมาะสมครับ</div>
+                </div>
+
+                <input type="text" id="userInput"
+                    placeholder="ป้อนอาการของเด็ก เช่น เด็กมีอาการไม่สบตา ไม่ตอบสนองต่อชื่อ">
+
+                <button onclick="sendMessage()">▶️ ส่งข้อมูลเพื่อรับแผน</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- ฐานข้อมูล RAG (จำลอง) และ User Auth ---
+
+        // User Authentication (จำลอง)
+        const USERS = {
+            'admin': { password: 'admin1234', role: 'admin' },
+            'user': { password: '1111', role: 'user' }
+        };
+
+        let currentUser = null;
+
+        // ฐานข้อมูล RAG (จำลอง) - ข้อมูลเริ่มต้น
+        let ragKnowledgeBase = [
+            { keyword: "ไม่สบตา", plan: "[แผนหลัก: ออทิสติก/ASD]\nเป้าหมาย: เพิ่มการสบตา 5 วินาที/ครั้ง\nกิจกรรม: ฝึกสบตาระหว่างให้รางวัล, ใช้ Social Stories" },
+            { keyword: "กล้ามเนื้อมืออ่อนแอ", plan: "[แผนหลัก: กายภาพ]\nเป้าหมาย: พัฒนาการประสานงานของมือและตา\nกิจกรรม: ปั้นดินน้ำมัน 15 นาที, ใช้กรรไกรตัดกระดาษตามเส้นตรง" },
+            { keyword: "สื่อสารด้วยท่าทาง", plan: "[แผนหลัก: สื่อสาร/พัฒนาการ]\nเป้าหมาย: ฝึกออกเสียง 3 พยางค์\nกิจกรรม: ฝึกใช้บัตรภาพ (PECS), เลียนเสียงสัตว์" }
+        ];
+
+        // --- ฟังก์ชัน Login/Logout ---
+
+        function login() {
+            const username = document.getElementById('loginUsername').value.trim().toLowerCase();
+            const password = document.getElementById('loginPassword').value.trim();
+            const msg = document.getElementById('loginMessage');
+
+            if (USERS[username] && USERS[username].password === password) {
+                currentUser = USERS[username];
+
+                document.getElementById('loginPage').style.display = 'none';
+                document.getElementById('mainApp').style.display = 'block';
+
+                document.body.style.display = 'block';
+                document.body.style.padding = '0';
+                document.body.style.minHeight = 'auto';
+
+                initializeApp(currentUser.role);
+            } else {
+                msg.textContent = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('mainApp').style.display = 'none';
+            document.getElementById('loginPage').style.display = 'grid';
+            document.getElementById('loginMessage').textContent = '';
+            document.getElementById('loginUsername').value = '';
+            document.getElementById('loginPassword').value = '';
+
+            document.body.style.display = 'flex';
+            document.body.style.justifyContent = 'center';
+            document.body.style.alignItems = 'center';
+            document.body.style.minHeight = '100vh';
+        }
+
+        function initializeApp(role) {
+            const adminPanel = document.getElementById('adminPanel');
+            const chatbotPanel = document.getElementById('chatbotPanel');
+            const userInfoDisplay = document.getElementById('userInfoDisplay');
+
+            userInfoDisplay.textContent = `เข้าสู่ระบบในฐานะ: ${role.toUpperCase()}`;
+
+            if (role === 'admin') {
+                adminPanel.style.display = 'block';
+                chatbotPanel.style.flex = 1;
+            } else {
+                adminPanel.style.display = 'none';
+                chatbotPanel.style.flex = 2;
+            }
+
+            displayRAGData();
+            document.getElementById('chatBox').innerHTML = '<div class="message ai-msg">สวัสดีครับ! กรุณาป้อนข้อมูลการประเมิน หรืออาการของเด็ก เพื่อให้ AI ช่วยแนะนำแผน IEP ที่เหมาะสมครับ</div>';
+        }
+
+        // --- ฟังก์ชัน RAG Data Display (ปรับปรุงเป็น Card) ---
+
+        function displayRAGData() {
+            const list = document.getElementById('ragDataList');
+            if (list) {
+                list.innerHTML = '';
+                ragKnowledgeBase.forEach((item, index) => {
+
+                    const card = document.createElement('div');
+                    card.className = 'rag-card';
+
+                    // Header (Keyword)
+                    const header = document.createElement('div');
+                    header.className = 'rag-card-header';
+                    header.innerHTML = `[${index + 1}] คำสำคัญ: <b>${item.keyword}</b>`;
+                    card.appendChild(header);
+
+                    // Content (Lesson Plan)
+                    const content = document.createElement('div');
+                    content.className = 'rag-card-content';
+                    content.textContent = item.plan;
+                    card.appendChild(content);
+
+                    // Actions (Delete Button)
+                    const actions = document.createElement('div');
+                    actions.className = 'rag-card-actions';
+
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.textContent = 'ลบข้อมูล';
+                    deleteBtn.className = 'delete-btn';
+                    deleteBtn.onclick = function () { deleteRAGData(index); };
+                    actions.appendChild(deleteBtn);
+
+                    card.appendChild(actions);
+                    list.appendChild(card);
+                });
+            }
+        }
+
+        // --- ฟังก์ชันใหม่: ลบข้อมูล RAG (พร้อมยืนยัน) ---
+        function deleteRAGData(index) {
+            if (currentUser.role !== 'admin') {
+                alert("คุณไม่มีสิทธิ์ในการลบข้อมูล RAG");
+                return;
+            }
+
+            const keywordToDelete = ragKnowledgeBase[index].keyword;
+
+            // *** การยืนยันก่อนลบ ***
+            if (confirm(`คุณแน่ใจหรือไม่ที่จะลบข้อมูล RAG สำหรับคำสำคัญ: "${keywordToDelete}"? การดำเนินการนี้ไม่สามารถยกเลิกได้`)) {
+                ragKnowledgeBase.splice(index, 1);
+                alert("ลบข้อมูลสำเร็จ");
+                displayRAGData(); // อัปเดตรายการ
+            }
+        }
+
+        // --- ฟังก์ชัน Admin (เพิ่มข้อมูล RAG) ---
+        function addRAGData() {
+            if (currentUser && currentUser.role !== 'admin') {
+                alert("คุณไม่มีสิทธิ์ในการเพิ่มข้อมูล RAG");
+                return;
+            }
+
+            const keyword = document.getElementById('keyword').value.trim();
+            const lessonPlan = document.getElementById('lessonPlan').value.trim();
+
+            if (keyword && lessonPlan) {
+                ragKnowledgeBase.push({ keyword, plan: lessonPlan });
+                alert(`เพิ่มข้อมูล RAG สำเร็จ: คำสำคัญ '${keyword}'`);
+                document.getElementById('keyword').value = '';
+                document.getElementById('lessonPlan').value = '';
+                displayRAGData();
+            } else {
+                alert("กรุณากรอกทั้งคำสำคัญและแผนการสอน");
+            }
+        }
+
+        // --- ฟังก์ชัน Chatbot Logic (เหมือนเดิม) ---
+        function sendMessage() {
+            const userInput = document.getElementById('userInput').value.trim();
+            if (userInput === "") return;
+
+            appendMessage(userInput, 'user-msg');
+            document.getElementById('userInput').value = '';
+
+            setTimeout(() => {
+                const aiResponse = generateAIResponse(userInput);
+                appendMessage(aiResponse, 'ai-msg');
+            }, 1000);
+        }
+
+        function appendMessage(text, type) {
+            const chatBox = document.getElementById('chatBox');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${type}`;
+
+            let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+            formattedText = formattedText.replace(/\n/g, '<br>');
+
+            msgDiv.innerHTML = formattedText;
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function generateAIResponse(input) {
+            let matchingPlans = [];
+            let inputLower = input.toLowerCase();
+
+            ragKnowledgeBase.forEach(item => {
+                if (inputLower.includes(item.keyword.toLowerCase())) {
+                    matchingPlans.push({
+                        keyword: item.keyword,
+                        plan: item.plan
+                    });
+                }
+            });
+
+            if (matchingPlans.length > 0) {
+                let response = "🤖 **ผลการวิเคราะห์และข้อเสนอแนะแผน IEP (จาก RAG System):**\n\n";
+                response += "เราพบคำสำคัญที่เกี่ยวข้องในรายงานของคุณดังนี้:\n";
+
+                matchingPlans.forEach((match, index) => {
+                    // ต้องเปลี่ยนข้อความแผนให้แสดงผลเป็นบรรทัดใหม่ในแชทด้วย
+                    const planText = match.plan.replace(/\n/g, '<br>');
+                    response += `\n**[💡 ความต้องการที่ ${index + 1}: ${match.keyword} ]**<br>`;
+                    response += `${planText}\n`;
+                });
+
+                response += "\n\n**ข้อเสนอแนะ:** กรุณานำแผนที่แนะนำไปปรับใช้ใน IEP ฉบับจริง";
+                return response;
+            } else {
+                return "ไม่พบข้อมูลแผนการสอนที่ตรงกับคำสำคัญที่คุณป้อนในคลังความรู้ RAG ปัจจุบันครับ";
+            }
+        }
+
+        // ตั้งค่าเริ่มต้นเมื่อโหลดหน้า
+        window.onload = () => {
+            document.getElementById('mainApp').style.display = 'none';
+            document.getElementById('loginPage').style.display = 'grid';
+            document.body.style.display = 'flex';
+            document.body.style.justifyContent = 'center';
+            document.body.style.alignItems = 'center';
+            document.body.style.minHeight = '100vh';
+        };
+    </script>
+
+</body>
+
+</html>
