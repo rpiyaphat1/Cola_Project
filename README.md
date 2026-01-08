@@ -174,20 +174,20 @@ System Flow Diagram
 Admin: ล็อกอิน ➔ อัปโหลดไฟล์ข้อมูล (Excel, Google sheet) ➔ ระบบแปลงข้อมูลเป็น Vector ➔ จัดเก็บลงฐานข้อมูล RAG
 User: ล็อกอิน ➔ รับชื่อเด็ก/คำถาม ➔ AI ค้นหาข้อมูลที่เกี่ยวข้องจาก Database ➔ ประมวลผลคำตอบ (NLP) ➔ ส่งคำตอบให้ Chatbot
 UI/UX Wireframe
-! [alt text] (Wireframe_COLA.png)
+![alt text](Wireframe_COLA.png)
 ตัวอย่างหน้าจอ
 Authentication
-! [alt text] (Authentication_COLA.png)
+![alt text](Authentication_COLA.png)
 Chatbot
-! [alt text] (ChatbotAdmin_COLA.png)
+![alt text](ChatbotAdmin_COLA.png)
 Admin Setting
-! [alt text] (Setting_COLA.png)
+![alt text](Setting_COLA.png)
 รายชื่อ
-! [alt text] (StudentList_COLA.png)
+![alt text](StudentList_COLA.png)
 Chatbot ตอบคำถาม (กรณีชื่อซ้ำกัน 3 คน)
-! [alt text] (ChatbotEx_COLA.png)
+![alt text](ChatbotEx_COLA.png)
 User (จะมีแค่ Chatbot, รายชื่อ)
-! [alt text] (ChatboxUser_COLA.png)
+![alt text](ChatboxUser_COLA.png)
 Prototype link : https://rpiyaphat1.github.io/COLAPrototype/
 	Admin:
 		Username: Admin1
