@@ -179,7 +179,7 @@ UI/UX Wireframe
 Authentication
 ![alt text](Authentication_COLA.png)
 Chatbot
-![alt text](ChatbotAdmin_COLA.png)
+![alt text](ChatboxAdmin_COLA.png)
 Admin Setting
 ![alt text](Setting_COLA.png)
 รายชื่อ
