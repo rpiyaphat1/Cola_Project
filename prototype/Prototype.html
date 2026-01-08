@@ -1,534 +1,538 @@
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IEP Chatbot พร้อมระบบ Login (ปรับปรุง Layout)</title>
+    <title>IEP Smart Assistant - ระบบสนับสนุนการดูแลนักเรียน</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&family=Kanit:wght@300;400;500&display=swap"
+        rel="stylesheet">
     <style>
-        /* --- General Reset & Body Styles --- */
+        :root {
+            --primary: #1e40af;
+            --admin: #5b21b6;
+            --bg: #f8fafc;
+            --white: #ffffff;
+            --border: #cbd5e1;
+            --text-main: #1e293b;
+            --text-label: #475569;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Sarabun', sans-serif;
             margin: 0;
-            padding: 0;
-            background-color: #f0f2f5;
-            color: #333;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-
-        /* --- Login Styles (คงไว้) --- */
-        #loginPage {
-            background-color: #fff;
-            padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
-            max-width: 550px; 
-            width: 90%;
-            text-align: left; 
-            display: grid; 
-            grid-template-columns: 1fr;
-            gap: 15px;
-        }
-        #loginPage h2 {
-            grid-column: 1 / span 2; 
-            color: #1f4e79;
-            margin-bottom: 25px;
-            text-align: center;
-            font-size: 1.8em;
-        }
-        
-        /* สไตล์สำหรับการแสดงสิทธิ์การใช้งาน (เหลือแค่คำอธิบายบทบาท) */
-        .auth-info-box {
-            grid-column: 1 / span 2;
-            background-color: #e6f7ff;
-            border-left: 5px solid #5b9bd5;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        .auth-info-box p {
-            font-weight: bold;
-            color: #1f4e79;
-            margin-top: 0;
-        }
-        .auth-info-box ul {
-            list-style: none;
-            padding: 0;
-            margin: 10px 0 0 0;
-        }
-        .auth-info-box li {
-            margin-bottom: 8px;
-            padding: 5px 0;
-            border-bottom: 1px dotted #a0c4e1;
-            font-size: 0.95em;
-        }
-        .auth-info-box li:last-child {
-            border-bottom: none;
-        }
-
-        /* จัด Input และ Button ให้อยู่ใน Grid ที่สมดุล */
-        .input-group {
-            grid-column: 1 / span 2;
+            background: var(--bg);
+            color: var(--text-main);
+            height: 100vh;
             display: flex;
             flex-direction: column;
-            gap: 5px;
-        }
-        #loginPage label {
-            font-weight: bold;
-            margin-bottom: 5px;
-            color: #444;
-        }
-        input[type="text"], input[type="password"] {
-            width: 100%; 
-            padding: 12px;
-            margin-bottom: 5px;
-            border-radius: 8px;
-            border: 1px solid #ccc;
-            box-sizing: border-box;
-        }
-        #loginButton {
-            grid-column: 1 / span 2;
-            padding: 15px;
-            margin-top: 15px;
-            background-color: #5b9bd5;
-            color: white;
-            cursor: pointer;
-            border: none;
-            border-radius: 8px;
-            font-weight: bold;
-            transition: background-color 0.3s;
-        }
-        #loginButton:hover {
-            background-color: #4472c4;
         }
 
-        /* --- Main App Styles --- */
-        #mainApp {
-            display: none;
-            width: 95%;
-            max-width: 1400px;
-            background-color: #fff;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            border-radius: 12px;
-            overflow: hidden;
-            margin: 20px;
-        }
-        .container {
+        /* --- Login --- */
+        #loginPage {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             display: flex;
-            min-height: 90vh;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
         }
-        .panel {
-            padding: 30px;
-            flex: 1;
+
+        .login-card {
+            background: white;
+            padding: 40px;
+            border-radius: 24px;
+            width: 100%;
+            max-width: 380px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
         }
-        .admin-panel {
-            background-color: #e6f7ff;
-            border-right: 1px solid #cceeff;
-            max-width: 450px;
+
+        .login-card h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #1e293b;
+            font-family: 'Kanit', sans-serif;
         }
-        .user-panel {
-            background-color: #ffffff;
-            flex: 2;
-        }
-        h3 {
-            border-bottom: 2px solid #5b9bd5;
-            padding-bottom: 10px;
-            color: #1f4e79;
-            margin-top: 0;
+
+        .login-group {
             margin-bottom: 20px;
         }
-        textarea, button {
-            width: 95%;
-            padding: 12px;
-            margin-bottom: 15px;
-            border-radius: 8px;
-            border: 1px solid #ddd;
-            box-sizing: border-box;
+
+        .login-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #64748b;
+            font-size: 0.9rem;
         }
-        .chat-box {
-            height: 60vh;
-            overflow-y: auto;
-            padding: 15px;
-            border: 1px solid #eee;
-            background-color: #ffffff;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+
+        .login-card input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-family: 'Sarabun';
         }
-        .message {
-            margin-bottom: 15px;
+
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        /* --- Navigation --- */
+        nav {
+            background: #0f172a;
+            color: white;
+            padding: 0.8rem 2rem;
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-links button {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
             padding: 10px 15px;
-            border-radius: 20px;
-            max-width: 80%;
-            word-wrap: break-word;
+            cursor: pointer;
+            font-family: 'Sarabun';
+        }
+
+        .nav-links button.active {
+            color: white;
+            border-bottom: 2px solid #60a5fa;
+        }
+
+        /* --- Main Content --- */
+        .container {
+            flex: 1;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+            display: none;
+            overflow: hidden;
+        }
+
+        .page {
+            display: none;
+            height: 100%;
+            overflow-y: auto;
+            flex-direction: column;
+            padding-bottom: 40px;
+        }
+
+        .page.active {
+            display: flex;
+        }
+
+        .card {
+            background: var(--white);
+            padding: 25px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+
+        /* --- Chat UI --- */
+        .chat-view {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: white;
+            border-radius: 15px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f1f5f9;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .msg {
+            margin-bottom: 12px;
+            padding: 12px 18px;
+            border-radius: 15px;
+            max-width: 85%;
             line-height: 1.5;
         }
+
         .user-msg {
-            background-color: #d9e9f9;
-            margin-left: auto;
-            border-bottom-right-radius: 5px;
-        }
-        .ai-msg {
-            background-color: #e2f0d9;
-            margin-right: auto;
-            border-bottom-left-radius: 5px;
-        }
-        
-        /* --- RAG Card Styles --- */
-        .rag-data-display {
-            padding: 0; 
-            border: none; 
-            margin-top: 25px;
-            font-size: 0.85em;
-            background-color: transparent; 
-        }
-        .rag-data-display > div {
-            max-height: 40vh;
-            overflow-y: auto;
-            padding-right: 5px;
-        }
-        .rag-card {
-            background-color: #ffffff;
-            border: 1px solid #cceeff;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        }
-        .rag-card-header {
-            font-weight: bold;
-            color: #1f4e79;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 5px;
-            margin-bottom: 10px;
-        }
-        .rag-card-content {
-            white-space: pre-wrap; 
-        }
-        .rag-card-actions {
-            margin-top: 15px;
-            text-align: right;
-            border-top: 1px solid #eee;
-            padding-top: 10px;
+            background: var(--primary);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
         }
 
-        /* --- ปุ่มลบ (สำหรับ Card) --- */
-        .delete-btn {
-            background-color: #f44336;
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 5px;
+        .ai-msg {
+            background: white;
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        /* ปุ่มตัวเลือกเมื่อชื่อซ้ำ */
+        .option-btn {
+            background: #fff;
+            border: 1.5px solid var(--primary);
+            color: var(--primary);
+            padding: 8px 16px;
+            border-radius: 20px;
             cursor: pointer;
-            font-size: 0.9em;
-            font-weight: bold;
-            transition: background-color 0.3s;
-            width: auto;
+            margin: 5px 5px 5px 0;
+            font-size: 0.9rem;
+            transition: 0.2s;
         }
-        .delete-btn:hover {
-            background-color: #d32f2f;
+
+        .option-btn:hover {
+            background: var(--primary);
+            color: white;
         }
-        
-        #logoutButton {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background-color: #f44336;
-            width: auto;
-            padding: 8px 15px;
-            border-radius: 5px;
-            font-size: 0.9em;
-            z-index: 100;
+
+        /* --- Admin & Directory --- */
+        .directory-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+        }
+
+        .admin-list-group {
+            margin-bottom: 25px;
+            border-top: 2px solid #eee;
+            padding-top: 15px;
+        }
+
+        .class-badge {
+            background: var(--primary);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            display: inline-block;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 0.95rem;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+
+        th {
+            background: #f8fafc;
+            color: var(--text-label);
+            font-weight: 600;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-family: 'Sarabun';
+            margin-top: 5px;
         }
     </style>
 </head>
+
 <body>
 
-<div id="loginPage">
-    <h2>🔑 เข้าสู่ระบบ Chatbot IEP</h2>
-    
-    <div class="auth-info-box">
-        <p>สิทธิ์การใช้งาน (จำลอง):</p>
-        <ul>
-            <li>**Admin:** จัดการคลังข้อมูล RAG</li>
-            <li>**User:** เข้าใช้งาน Chatbot เท่านั้น</li>
-        </ul>
+    <div id="loginPage">
+        <div class="login-card">
+            <h2>🔐 เข้าสู่ระบบ</h2>
+            <div class="login-group">
+                <label>Username</label>
+                <input type="text" id="userIn" placeholder="admin1 หรือ user">
+            </div>
+            <div class="login-group">
+                <label>Password</label>
+                <input type="password" id="passIn" placeholder="รหัสผ่าน">
+            </div>
+            <button class="btn-login" onclick="login()">เข้าสู่ระบบ</button>
+        </div>
     </div>
 
-    <div class="input-group">
-        <label for="loginUsername">Username:</label>
-        <input type="text" id="loginUsername" placeholder="เช่น admin หรือ user">
-    </div>
-    
-    <div class="input-group">
-        <label for="loginPassword">Password:</label>
-        <input type="password" id="loginPassword" placeholder="รหัสผ่าน">
-    </div>
-    
-    <button id="loginButton" onclick="login()">เข้าสู่ระบบ</button>
-    <p id="loginMessage" style="color: #f44336; margin-top: 5px; text-align: center;"></p>
-</div>
+    <nav id="mainNav">
+        <div style="font-weight: 500;">IEP <span style="color:#60a5fa">Assistant</span></div>
+        <div class="nav-links">
+            <button id="navChat" class="active" onclick="togglePage('chat')">💬 แชทสืบค้น</button>
+            <button id="navDir" onclick="togglePage('dir')">📂 รายชื่อเด็ก</button>
+            <button id="navAdmin" class="hidden" onclick="togglePage('admin')">⚙️ ตั้งค่า (Admin)</button>
+            <button onclick="logout()" style="color:#ef4444">ออกจากระบบ</button>
+        </div>
+    </nav>
 
-<div id="mainApp">
-    <button id="logoutButton" onclick="logout()">ออกจากระบบ</button>
-    <div class="container">
-        
-        <div class="panel admin-panel" id="adminPanel">
-            <h3>🛠️ Admin: ป้อนข้อมูลความรู้ (RAG Data)</h3>
-            <p>กรุณาป้อน 'คำสำคัญ' (อาการ/ความต้องการ) และ 'แผนการสอน' ที่สอดคล้อง</p>
-            
-            <label for="keyword">คำสำคัญ (Keyword):</label>
-            <input type="text" id="keyword" placeholder="เช่น สื่อสารด้วยท่าทาง, ไม่สบตา, กล้ามเนื้อมืออ่อนแอ">
-            
-            <label for="lessonPlan">แผนการสอน (IEP/กิจกรรม):</label>
-            <textarea id="lessonPlan" rows="5" placeholder="เช่น [กิจกรรม: ทักษะการสื่อสาร] ฝึกใช้บัตรภาพ 10 นาที, [เป้าหมาย: กายภาพ] ใช้กรรไกรตัดกระดาษ 5 ครั้ง"></textarea>
-            
-            <button onclick="addRAGData()">➕ เพิ่มข้อมูล RAG</button>
+    <div class="container" id="mainApp">
+        <div id="chatPage" class="page active">
+            <div class="chat-view">
+                <div class="messages" id="chatBox">
+                    <div class="msg ai-msg"><strong>สวัสดีครับ</strong><br>พิมพ์ชื่อนักเรียนเพื่อดูวิธีรับมือ
+                        หรือถามหาตามประเภท เช่น "ขอดูเด็กออทิสติก" ครับ</div>
+                </div>
+                <div class="footer"
+                    style="padding:15px; display:flex; gap:10px; background:white; border-top:1px solid #ddd;">
+                    <input type="text" id="chatInput" placeholder="พิมพ์ชื่อเด็ก หรือประเภท..."
+                        onkeypress="if(event.key==='Enter') doSmartSearch()">
+                    <button class="btn-login" style="margin-top:0; width:100px" onclick="doSmartSearch()">ส่ง</button>
+                </div>
+            </div>
+        </div>
 
-            <div class="rag-data-display">
-                <p style="font-weight: bold; margin-bottom: 10px;">คลังข้อมูล RAG ปัจจุบัน:</p>
-                <div id="ragDataList">
+        <div id="dirPage" class="page">
+            <div class="card">
+                <h3>📂 ทำเนียบนักเรียนแยกตามห้อง</h3>
+                <div id="directoryContent"></div>
+            </div>
+        </div>
+
+        <div id="adminPage" class="page">
+            <div class="card" style="border: 2px dashed var(--admin);">
+                <h3>📥 นำเข้าไฟล์ (Excel/CSV)</h3>
+                <input type="file" id="excelInput" accept=".xlsx, .csv" onchange="importData(event)">
+            </div>
+
+            <div class="card">
+                <h3>👤 เพิ่มข้อมูลนักเรียนรายคน</h3>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                    <div><label>ชื่อเล่น</label><input type="text" id="inNick"></div>
+                    <div><label>ชื่อจริง-นามสกุล</label><input type="text" id="inFull"></div>
+                    <div><label>ชั้น (เช่น ป.1/1)</label><input type="text" id="inClass"></div>
+                    <div>
+                        <label>ประเภทความบกพร่อง</label>
+                        <select id="inType">
+                            <option value="0">0. บุคคลทั่วไป</option>
+                            <option value="1">1. การเห็น</option>
+                            <option value="2">2. การได้ยิน</option>
+                            <option value="3">3. สติปัญญา</option>
+                            <option value="4">4. ร่างกาย</option>
+                            <option value="5">5. เรียนรู้ (LD)</option>
+                            <option value="6">6. พูด/ภาษา</option>
+                            <option value="7">7. พฤติกรรม</option>
+                            <option value="8">8. ออทิสติก</option>
+                            <option value="9">9. พิการซ้อน</option>
+                        </select>
                     </div>
+                </div>
+                <div style="margin-top:15px;"><label>วิธีรับมือ/เทคนิคเฉพาะ</label><textarea id="inHandle"
+                        rows="3"></textarea></div>
+                <button class="btn-login" style="background:var(--admin)" onclick="saveStudent()">💾
+                    บันทึกข้อมูล</button>
             </div>
-        </div>
 
-        <div class="panel user-panel" id="chatbotPanel">
-            <h3>🤖 Chatbot: จัดแผนการศึกษาเฉพาะบุคคล</h3>
-            <div id="userInfoDisplay" style="margin-bottom: 20px; font-weight: bold; color: #4472c4;"></div>
-            
-            <div class="chat-box" id="chatBox">
-                <div class="message ai-msg">สวัสดีครับ! กรุณาป้อนข้อมูลการประเมิน หรืออาการของเด็ก เพื่อให้ AI ช่วยแนะนำแผน IEP ที่เหมาะสมครับ</div>
+            <div class="card">
+                <h3>📑 รายชื่อทั้งหมด (จัดระเบียบตามห้อง)</h3>
+                <div id="adminStudentList"></div>
             </div>
-            
-            <input type="text" id="userInput" placeholder="ป้อนอาการของเด็ก เช่น เด็กมีอาการไม่สบตา ไม่ตอบสนองต่อชื่อ">
-            
-            <button onclick="sendMessage()">▶️ ส่งข้อมูลเพื่อรับแผน</button>
         </div>
     </div>
-</div>
 
-<script>
-    // --- ฐานข้อมูล RAG (จำลอง) และ User Auth ---
-    
-    // User Authentication (จำลอง) - Credentials ถูกซ่อนจาก HTML
-    const USERS = {
-        'admin': { password: 'admin1234', role: 'admin' },
-        'user': { password: '1111', role: 'user' }
-    };
-    
-    let currentUser = null;
+    <script>
+        let db = [];
+        let currentUser = null;
+        const typeNames = {
+            "0": "บุคคลทั่วไป", "1": "บกพร่องทางการเห็น", "2": "บกพร่องทางการได้ยิน",
+            "3": "บกพร่องทางสติปัญญา", "4": "บกพร่องทางร่างกาย", "5": "บกพร่องทางการเรียนรู้ (LD)",
+            "6": "บกพร่องทางการพูด/ภาษา", "7": "บกพร่องทางพฤติกรรม", "8": "บุคคลออทิสติก", "9": "บุคคลพิการซ้อน"
+        };
 
-    // ฐานข้อมูล RAG (จำลอง) - ข้อมูลเริ่มต้น
-    let ragKnowledgeBase = [
-        { keyword: "ไม่สบตา", plan: "[แผนหลัก: ออทิสติก/ASD]\nเป้าหมาย: เพิ่มการสบตา 5 วินาที/ครั้ง\nกิจกรรม: ฝึกสบตาระหว่างให้รางวัล, ใช้ Social Stories" },
-        { keyword: "กล้ามเนื้อมืออ่อนแอ", plan: "[แผนหลัก: กายภาพ]\nเป้าหมาย: พัฒนาการประสานงานของมือและตา\nกิจกรรม: ปั้นดินน้ำมัน 15 นาที, ใช้กรรไกรตัดกระดาษตามเส้นตรง" },
-        { keyword: "สื่อสารด้วยท่าทาง", plan: "[แผนหลัก: สื่อสาร/พัฒนาการ]\nเป้าหมาย: ฝึกออกเสียง 3 พยางค์\nกิจกรรม: ฝึกใช้บัตรภาพ (PECS), เลียนเสียงสัตว์" }
-    ];
-
-    // --- ฟังก์ชัน Login/Logout ---
-
-    function login() {
-        // แปลง Username เป็นตัวพิมพ์เล็กก่อนการตรวจสอบ
-        const username = document.getElementById('loginUsername').value.trim().toLowerCase(); 
-        const password = document.getElementById('loginPassword').value.trim();
-        const msg = document.getElementById('loginMessage');
-        
-        if (USERS[username] && USERS[username].password === password) {
-            currentUser = USERS[username];
-            
+        function login() {
+            const u = document.getElementById('userIn').value.trim().toLowerCase();
+            const p = document.getElementById('passIn').value;
+            if (u === 'admin1' && p === '1234') currentUser = { role: 'admin' };
+            else if (u === 'user' && p === '1111') currentUser = { role: 'user' };
+            else return alert('รหัสผ่านไม่ถูกต้อง');
             document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('mainNav').style.display = 'flex';
             document.getElementById('mainApp').style.display = 'block';
-            
-            document.body.style.display = 'block';
-            document.body.style.padding = '0';
-            document.body.style.minHeight = 'auto';
-            
-            initializeApp(currentUser.role);
-        } else {
-            msg.textContent = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
-        }
-    }
-
-    function logout() {
-        currentUser = null;
-        document.getElementById('mainApp').style.display = 'none';
-        document.getElementById('loginPage').style.display = 'grid'; 
-        document.getElementById('loginMessage').textContent = '';
-        document.getElementById('loginUsername').value = '';
-        document.getElementById('loginPassword').value = '';
-
-        document.body.style.display = 'flex';
-        document.body.style.justifyContent = 'center';
-        document.body.style.alignItems = 'center';
-        document.body.style.minHeight = '100vh';
-    }
-
-    function initializeApp(role) {
-        const adminPanel = document.getElementById('adminPanel');
-        const chatbotPanel = document.getElementById('chatbotPanel');
-        const userInfoDisplay = document.getElementById('userInfoDisplay');
-        
-        userInfoDisplay.textContent = `เข้าสู่ระบบในฐานะ: ${role.toUpperCase()}`;
-        
-        if (role === 'admin') {
-            adminPanel.style.display = 'block';
-            chatbotPanel.style.flex = 1; 
-        } else {
-            adminPanel.style.display = 'none';
-            chatbotPanel.style.flex = 2;
-        }
-        
-        displayRAGData();
-        document.getElementById('chatBox').innerHTML = '<div class="message ai-msg">สวัสดีครับ! กรุณาป้อนข้อมูลการประเมิน หรืออาการของเด็ก เพื่อให้ AI ช่วยแนะนำแผน IEP ที่เหมาะสมครับ</div>';
-    }
-
-    // --- ฟังก์ชัน RAG Data Display (ปรับปรุงเป็น Card) ---
-
-    function displayRAGData() {
-        const list = document.getElementById('ragDataList');
-        if (list) { 
-            list.innerHTML = '';
-            ragKnowledgeBase.forEach((item, index) => {
-                
-                const card = document.createElement('div');
-                card.className = 'rag-card';
-                
-                // Header (Keyword)
-                const header = document.createElement('div');
-                header.className = 'rag-card-header';
-                header.innerHTML = `[${index + 1}] คำสำคัญ: <b>${item.keyword}</b>`;
-                card.appendChild(header);
-
-                // Content (Lesson Plan)
-                const content = document.createElement('div');
-                content.className = 'rag-card-content';
-                content.textContent = item.plan;
-                card.appendChild(content);
-                
-                // Actions (Delete Button)
-                const actions = document.createElement('div');
-                actions.className = 'rag-card-actions';
-                
-                const deleteBtn = document.createElement('button');
-                deleteBtn.textContent = 'ลบข้อมูล';
-                deleteBtn.className = 'delete-btn';
-                deleteBtn.onclick = function() { deleteRAGData(index); }; 
-                actions.appendChild(deleteBtn);
-                
-                card.appendChild(actions);
-                list.appendChild(card);
-            });
-        }
-    }
-    
-    // --- ฟังก์ชันใหม่: ลบข้อมูล RAG (พร้อมยืนยัน) ---
-    function deleteRAGData(index) {
-        if (currentUser.role !== 'admin') {
-            alert("คุณไม่มีสิทธิ์ในการลบข้อมูล RAG");
-            return;
-        }
-        
-        const keywordToDelete = ragKnowledgeBase[index].keyword;
-
-        // *** การยืนยันก่อนลบ ***
-        if (confirm(`คุณแน่ใจหรือไม่ที่จะลบข้อมูล RAG สำหรับคำสำคัญ: "${keywordToDelete}"? การดำเนินการนี้ไม่สามารถยกเลิกได้`)) {
-            ragKnowledgeBase.splice(index, 1);
-            alert("ลบข้อมูลสำเร็จ");
-            displayRAGData(); // อัปเดตรายการ
-        }
-    }
-
-    // --- ฟังก์ชัน Admin (เพิ่มข้อมูล RAG) ---
-    function addRAGData() {
-        if (currentUser && currentUser.role !== 'admin') {
-            alert("คุณไม่มีสิทธิ์ในการเพิ่มข้อมูล RAG");
-            return;
+            if (currentUser.role === 'admin') document.getElementById('navAdmin').classList.remove('hidden');
+            renderAdminView();
         }
 
-        const keyword = document.getElementById('keyword').value.trim();
-        const lessonPlan = document.getElementById('lessonPlan').value.trim();
+        function logout() { location.reload(); }
 
-        if (keyword && lessonPlan) {
-            ragKnowledgeBase.push({ keyword, plan: lessonPlan });
-            alert(`เพิ่มข้อมูล RAG สำเร็จ: คำสำคัญ '${keyword}'`);
-            document.getElementById('keyword').value = '';
-            document.getElementById('lessonPlan').value = '';
-            displayRAGData();
-        } else {
-            alert("กรุณากรอกทั้งคำสำคัญและแผนการสอน");
+        function togglePage(p) {
+            document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-links button').forEach(el => el.classList.remove('active'));
+            document.getElementById(p + 'Page').classList.add('active');
+            document.getElementById('nav' + p.charAt(0).toUpperCase() + p.slice(1)).classList.add('active');
+            if (p === 'dir') renderDirectory();
+            if (p === 'admin') renderAdminView();
         }
-    }
 
-    // --- ฟังก์ชัน Chatbot Logic (เหมือนเดิม) ---
-    function sendMessage() {
-        const userInput = document.getElementById('userInput').value.trim();
-        if (userInput === "") return;
-
-        appendMessage(userInput, 'user-msg');
-        document.getElementById('userInput').value = '';
-
-        setTimeout(() => {
-            const aiResponse = generateAIResponse(userInput);
-            appendMessage(aiResponse, 'ai-msg');
-        }, 1000);
-    }
-
-    function appendMessage(text, type) {
-        const chatBox = document.getElementById('chatBox');
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `message ${type}`;
-        
-        let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-        formattedText = formattedText.replace(/\n/g, '<br>');
-
-        msgDiv.innerHTML = formattedText;
-        chatBox.appendChild(msgDiv);
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }
-
-    function generateAIResponse(input) {
-        let matchingPlans = [];
-        let inputLower = input.toLowerCase();
-        
-        ragKnowledgeBase.forEach(item => {
-            if (inputLower.includes(item.keyword.toLowerCase())) {
-                matchingPlans.push({
-                    keyword: item.keyword,
-                    plan: item.plan
+        function importData(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                json.forEach(item => {
+                    const getVal = (keys) => {
+                        const foundKey = Object.keys(item).find(k => keys.some(target => k.replace(/\s/g, '').includes(target)));
+                        return foundKey ? item[foundKey] : null;
+                    };
+                    const rawType = String(getVal(["ประเภท", "Type"]) || "0");
+                    const typeMatch = rawType.match(/\d+/);
+                    db.push({
+                        nick: getVal(["ชื่อเล่น", "ชื่อเรียก"]) || "-",
+                        full: getVal(["ชื่อ-นามสกุล", "ชื่อจริง", "ชื่อ-นามสกุล"]) || "-",
+                        class: getVal(["ชั้นเรียน", "ชั้น", "ห้อง"]) || "-",
+                        type: typeMatch ? typeMatch[0] : "0",
+                        handle: getVal(["วิธีรับมือ", "เทคนิค", "หมายเหตุ"]) || "-"
+                    });
                 });
-            }
-        });
-
-        if (matchingPlans.length > 0) {
-            let response = "🤖 **ผลการวิเคราะห์และข้อเสนอแนะแผน IEP (จาก RAG System):**\n\n";
-            response += "เราพบคำสำคัญที่เกี่ยวข้องในรายงานของคุณดังนี้:\n";
-            
-            matchingPlans.forEach((match, index) => {
-                // ต้องเปลี่ยนข้อความแผนให้แสดงผลเป็นบรรทัดใหม่ในแชทด้วย
-                const planText = match.plan.replace(/\n/g, '<br>');
-                response += `\n**[💡 ความต้องการที่ ${index + 1}: ${match.keyword} ]**<br>`;
-                response += `${planText}\n`;
-            });
-
-            response += "\n\n**ข้อเสนอแนะ:** กรุณานำแผนที่แนะนำไปปรับใช้ใน IEP ฉบับจริง";
-            return response;
-        } else {
-            return "ไม่พบข้อมูลแผนการสอนที่ตรงกับคำสำคัญที่คุณป้อนในคลังความรู้ RAG ปัจจุบันครับ";
+                renderAdminView();
+                alert("นำเข้าสำเร็จ " + json.length + " รายการ");
+            };
+            reader.readAsArrayBuffer(file);
         }
-    }
 
-    // ตั้งค่าเริ่มต้นเมื่อโหลดหน้า
-    window.onload = () => {
-        document.getElementById('mainApp').style.display = 'none';
-        document.getElementById('loginPage').style.display = 'grid'; 
-        document.body.style.display = 'flex';
-        document.body.style.justifyContent = 'center';
-        document.body.style.alignItems = 'center';
-        document.body.style.minHeight = '100vh';
-    };
-</script>
+        function renderAdminView() {
+            const cont = document.getElementById('adminStudentList');
+            if (db.length === 0) return cont.innerHTML = "ยังไม่มีข้อมูลนักเรียน";
+            const classes = [...new Set(db.map(s => s.class))].sort();
+            cont.innerHTML = classes.map(c => `
+                <div class="admin-list-group">
+                    <div class="class-badge">ห้อง ${c}</div>
+                    <table>
+                        <thead><tr><th>ชื่อเล่น</th><th>ชื่อจริง-นามสกุล</th><th>ประเภท</th><th>จัดการ</th></tr></thead>
+                        <tbody>
+                            ${db.filter(s => s.class === c).map(s => `<tr>
+                                <td>${s.nick}</td>
+                                <td>${s.full}</td>
+                                <td>${s.type}. ${typeNames[s.type]}</td>
+                                <td><button onclick="deleteStudent(${db.indexOf(s)})" style="color:red; border:none; background:none; cursor:pointer;">ลบ</button></td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `).join('');
+        }
 
+        function deleteStudent(i) { if (confirm('ยืนยันการลบ?')) { db.splice(i, 1); renderAdminView(); } }
+
+        function saveStudent() {
+            db.push({
+                nick: document.getElementById('inNick').value || "-",
+                full: document.getElementById('inFull').value || "-",
+                class: document.getElementById('inClass').value || "-",
+                type: document.getElementById('inType').value,
+                handle: document.getElementById('inHandle').value || "-"
+            });
+            renderAdminView(); alert("บันทึกแล้ว");
+            document.querySelectorAll('#adminPage input, #adminPage textarea').forEach(el => el.value = "");
+        }
+
+        function renderDirectory() {
+            const cont = document.getElementById('directoryContent');
+            const classes = [...new Set(db.map(s => s.class))].sort();
+            cont.innerHTML = classes.map(c => `
+                <div class="class-section" style="margin-bottom:20px; border-left:4px solid var(--primary); padding-left:15px;">
+                    <h4 style="margin:0 0 10px 0;">ห้อง ${c}</h4>
+                    <div class="directory-grid">
+                        ${db.filter(s => s.class === c).map(s => `
+                            <div style="background:white; padding:10px; border-radius:8px; border:1px solid #eee; font-size:0.9rem;">
+                                <strong>${s.full} (${s.nick})</strong><br><small style="color:#666">${typeNames[s.type]}</small>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- ส่วนที่แก้ไข: AI SMART SEARCH พร้อมระบบปุ่มตัวเลือก ---
+        function doSmartSearch() {
+            const val = document.getElementById('chatInput').value.trim();
+            if (!val) return;
+            addMsg(val, 'user-msg');
+            document.getElementById('chatInput').value = "";
+
+            setTimeout(() => {
+                const text = val.toLowerCase();
+
+                // 1. ค้นหาตามประเภทนักเรียน (เช่น "เด็ก LD")
+                for (let key in typeNames) {
+                    if (text.includes(typeNames[key].toLowerCase()) || (key === "5" && text.includes("ld"))) {
+                        let filtered = db.filter(s => s.type === key);
+                        if (filtered.length > 0) return addMsg(formatList(`พบน้องนักเรียนกลุ่ม ${typeNames[key]} ทั้งหมด ${filtered.length} ท่าน:`, filtered), 'ai-msg');
+                    }
+                }
+
+                // 2. ค้นหาตามชื่อ (ชื่อจริง หรือ ชื่อเล่น)
+                let matches = db.filter(s => text.includes(s.nick.toLowerCase()) || text.includes(s.full.toLowerCase()) || s.full.toLowerCase().includes(text));
+
+                if (matches.length === 1) {
+                    // พบคนเดียว แสดงข้อมูลทันที
+                    return addMsg(report(matches[0]), 'ai-msg');
+                } else if (matches.length > 1) {
+                    // พบหลายคน (ชื่อซ้ำ) -> ส่งปุ่มตัวเลือก
+                    let btns = matches.map(s => `<button class="option-btn" onclick="setSearch('${s.full}')">${s.full} (${s.nick}) [${s.class}]</button>`).join('');
+                    return addMsg(`พบข้อมูลที่ใกล้เคียงจำนวน ${matches.length} ท่าน กรุณาเลือกคนที่ต้องการทราบข้อมูลครับ:<br>${btns}`, 'ai-msg');
+                }
+
+                addMsg("ไม่พบข้อมูลที่ระบุครับ ลองระบุชื่อเล่น หรือประเภทนักเรียนดูครับ", 'ai-msg');
+            }, 500);
+        }
+
+        function formatList(title, list) {
+            list.sort((a, b) => a.class.localeCompare(b.class));
+            let html = `<strong>${title}</strong><br>`;
+            let curClass = "";
+            list.forEach(s => {
+                if (s.class !== curClass) { html += `<div style="color:blue; margin-top:5px;">📍 ห้อง ${s.class}</div>`; curClass = s.class; }
+                html += `• ${s.full} (${s.nick})<br>`;
+            });
+            return html;
+        }
+
+        function report(s) {
+            return `📊 <strong>โปรไฟล์: ${s.full} (${s.nick})</strong><br>ห้อง: ${s.class} | ประเภท: ${typeNames[s.type]}<hr>✅ <strong>วิธีรับมือ:</strong> ${s.handle}`;
+        }
+
+        function addMsg(t, c) {
+            const box = document.getElementById('chatBox');
+            const d = document.createElement('div'); d.className = `msg ${c}`; d.innerHTML = t;
+            box.appendChild(d); box.scrollTop = box.scrollHeight;
+        }
+
+        // ฟังก์ชันเมื่อคลิกปุ่มตัวเลือก
+        window.setSearch = function (v) {
+            document.getElementById('chatInput').value = v;
+            doSmartSearch();
+        }
+    </script>
 </body>
+
 </html>
