@@ -2,7 +2,7 @@
 วิชา CP413601 การประยุกต์ใช้งานปัญญาประดิษฐ์ในกิจการสาธารณะ
 
 สมาชิกในกลุ่ม
-![alt text](name_list.png)
+![alt text](images/name_list.png)
 
 
 อาจารย์ที่ปรึกษา: รศ.ดร. ณรงค์ เกียรติคุณวงศ์
@@ -157,20 +157,20 @@ System Flow Diagram
 Admin: ล็อกอิน ➔ อัปโหลดไฟล์ข้อมูล (Excel, Google sheet) ➔ ระบบแปลงข้อมูลเป็น Vector ➔ จัดเก็บลงฐานข้อมูล RAG
 User: ล็อกอิน ➔ รับชื่อเด็ก/คำถาม ➔ AI ค้นหาข้อมูลที่เกี่ยวข้องจาก Database ➔ ประมวลผลคำตอบ (NLP) ➔ ส่งคำตอบให้ Chatbot
 UI/UX Wireframe
-![alt text](Wireframe_COLA.png)
+![alt text](images/Wireframe_COLA.png)
 ตัวอย่างหน้าจอ
 Authentication
-![alt text](Authentication_COLA.png)
+![alt text](images/Authentication_COLA.png)
 Chatbot
-![alt text](ChatboxAdmin_COLA.png)
+![alt text](images/ChatboxAdmin_COLA.png)
 Admin Setting
-![alt text](Setting_COLA.png)
+![alt text](images/Setting_COLA.png)
 รายชื่อ
-![alt text](StudentList_COLA.png)
+![alt text](images/StudentList_COLA.png)
 Chatbot ตอบคำถาม (กรณีชื่อซ้ำกัน 3 คน)
-![alt text](ChatbotEx_COLA.png)
+![alt text](images/ChatbotEx_COLA.png)
 User (จะมีแค่ Chatbot, รายชื่อ)
-![alt text](ChatboxUser_COLA.png)
+![alt text](images/ChatboxUser_COLA.png)
 Prototype link : https://rpiyaphat1.github.io/COLAPrototype/
 	Admin:
 		Username: Admin1
