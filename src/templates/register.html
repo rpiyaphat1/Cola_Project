@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <title>ลงทะเบียน - IEP Smart Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 min-h-screen flex flex-col font-sans">
+
+    <nav class="bg-indigo-900 text-white shadow-lg mb-8 font-sans">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center text-sm font-medium">
+            <div class="flex items-center space-x-10">
+                <div class="font-bold text-xl uppercase italic tracking-tighter border-r border-indigo-700 pr-10">
+                    IEP Smart Assistant
+                </div>
+
+                <div class="flex space-x-8">
+                    <a href="{{ url_for('chatbot_page') }}"
+                        class="{% if request.endpoint == 'chatbot_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">Chatbot
+                        AI</a>
+
+                    <a href="{{ url_for('student_list_page') }}"
+                        class="{% if request.endpoint == 'student_list_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">รายชื่อนักเรียน</a>
+
+                    {% if session['permission'] == 'Admin' %}
+                    <a href="{{ url_for('import_page') }}"
+                        class="{% if request.endpoint == 'import_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">นำเข้าข้อมูล</a>
+
+                    <a href="{{ url_for('admin_dashboard') }}"
+                        class="{% if request.endpoint == 'admin_dashboard' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">Dashboard</a>
+
+                    <a href="{{ url_for('register_page') }}"
+                        class="{% if request.endpoint == 'register_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">ลงทะเบียน</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="relative">
+                <button onclick="toggleDropdown()"
+                    class="bg-indigo-800 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition flex items-center shadow-md outline-none">
+                    {{ session['displayname'] }} <span class="ml-2 text-[10px]">▼</span>
+                </button>
+                <div id="user-menu"
+                    class="absolute right-0 w-48 mt-2 py-2 bg-white rounded-xl shadow-xl hidden z-50 text-slate-700 border border-slate-100">
+                    <a href="{{ url_for('setting_page') }}" class="block px-4 py-2 hover:bg-indigo-50 transition">⚙️
+                        ตั้งค่า (Settings)</a>
+                    <hr class="my-1 border-slate-100">
+                    <a href="/logout"
+                        class="block px-4 py-2 text-sm text-rose-600 font-bold hover:bg-rose-50 transition">ออกจากระบบ</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="flex items-center justify-center flex-grow px-4 pb-12">
+        <div class="bg-white p-12 rounded-3xl shadow-2xl max-w-md w-full border border-gray-100">
+            <h2 class="text-3xl font-extrabold mb-2 text-gray-800 text-center">ลงทะเบียน</h2>
+            <p class="text-gray-400 text-center mb-8 text-sm italic">สร้างบัญชีผู้ใช้งานใหม่ในระบบ</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for category, message in messages %}
+            <div
+                class="bg-rose-50 border-l-4 border-rose-500 text-rose-700 p-4 mb-6 rounded-r-lg text-xs font-bold animate-pulse">
+                {{ message }}
+            </div>
+            {% endfor %}{% endif %}
+            {% endwith %}
+
+            <form action="/register" method="POST" class="space-y-5" onsubmit="disableButton()">
+                <div>
+                    <label
+                        class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">Username</label>
+                    <input type="text" name="username"
+                        class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 shadow-sm transition-all"
+                        placeholder="ตั้งชื่อผู้ใช้" required>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">Display
+                        Name</label>
+                    <input type="text" name="displayname"
+                        class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 shadow-sm transition-all"
+                        placeholder="ชื่อที่ใช้แสดง" required>
+                </div>
+                <div>
+                    <label
+                        class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">Password</label>
+                    <input type="password" name="password"
+                        class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 shadow-sm transition-all"
+                        placeholder="••••••••" required>
+                </div>
+                <div>
+                    <label
+                        class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">ระดับสิทธิ์
+                        (Permission)</label>
+                    <select name="permission"
+                        class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 font-bold text-sm shadow-sm cursor-pointer">
+                        <option value="User">User (ผู้ใช้งานทั่วไป)</option>
+                        <option value="Admin">Admin (ผู้ดูแลระบบ)</option>
+                    </select>
+                </div>
+                <button type="submit" id="submit-btn"
+                    class="w-full bg-blue-600 text-white font-bold py-4 mt-4 rounded-xl hover:bg-blue-700 shadow-lg transform active:scale-95 transition-all uppercase tracking-widest text-sm">
+                    บันทึกข้อมูลสมาชิก
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function toggleDropdown() {
+            const menu = document.getElementById('user-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        window.onclick = function (event) {
+            if (!event.target.closest('.relative')) {
+                const menu = document.getElementById('user-menu');
+                if (menu && !menu.classList.contains('hidden')) {
+                    menu.classList.add('hidden');
+                }
+            }
+        }
+
+        function disableButton() {
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = true;
+            btn.innerText = 'กำลังบันทึกข้อมูล...';
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    </script>
+</body>
+
+</html>

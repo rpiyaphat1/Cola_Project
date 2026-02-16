@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Import Data - IEP Smart Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-slate-50 min-h-screen flex flex-col font-sans overflow-hidden">
+
+    <nav class="bg-indigo-900 text-white shadow-lg mb-8 font-sans">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center text-sm font-medium">
+            <div class="flex items-center space-x-10">
+                <div class="font-bold text-xl uppercase italic tracking-tighter border-r border-indigo-700 pr-10">
+                    IEP Smart Assistant
+                </div>
+
+                <div class="flex space-x-8">
+                    <a href="{{ url_for('chatbot_page') }}"
+                        class="{% if request.endpoint == 'chatbot_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">Chatbot
+                        AI</a>
+
+                    <a href="{{ url_for('student_list_page') }}"
+                        class="{% if request.endpoint == 'student_list_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">รายชื่อนักเรียน</a>
+
+                    {% if session['permission'] == 'Admin' %}
+                    <a href="{{ url_for('import_page') }}"
+                        class="{% if request.endpoint == 'import_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">นำเข้าข้อมูล</a>
+
+                    <a href="{{ url_for('admin_dashboard') }}"
+                        class="{% if request.endpoint == 'admin_dashboard' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">Dashboard</a>
+
+                    <a href="{{ url_for('register_page') }}"
+                        class="{% if request.endpoint == 'register_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">ลงทะเบียน</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="relative">
+                <button onclick="toggleDropdown()"
+                    class="bg-indigo-800 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition flex items-center shadow-md outline-none">
+                    {{ session['displayname'] }} <span class="ml-2 text-[10px]">▼</span>
+                </button>
+                <div id="user-menu"
+                    class="absolute right-0 w-48 mt-2 py-2 bg-white rounded-xl shadow-xl hidden z-50 text-slate-700 border border-slate-100">
+                    <a href="{{ url_for('setting_page') }}" class="block px-4 py-2 hover:bg-indigo-50 transition">⚙️
+                        ตั้งค่า (Settings)</a>
+                    <hr class="my-1 border-slate-100">
+                    <a href="/logout"
+                        class="block px-4 py-2 text-sm text-rose-600 font-bold hover:bg-rose-50 transition">ออกจากระบบ</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow flex flex-col w-full p-6 items-center">
+        <div class="bg-white rounded-3xl shadow-xl border border-slate-100 w-full max-w-4xl p-10">
+            <div class="flex items-center space-x-4 mb-8">
+                <div
+                    class="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg">
+                    📥</div>
+                <div>
+                    <h2 class="font-bold text-slate-800 text-2xl uppercase italic">Data Ingestion Service</h2>
+                    <p class="text-xs text-slate-400 font-bold uppercase tracking-widest">Flask API Microservice Layer
+                    </p>
+                </div>
+            </div>
+
+            <div id="drop-zone"
+                class="border-4 border-dashed border-slate-100 rounded-[2rem] p-20 text-center hover:border-indigo-400 hover:bg-indigo-50/30 transition-all cursor-pointer group"
+                onclick="document.getElementById('file-input').click()">
+                <input type="file" id="file-input" class="hidden" accept=".xlsx" onchange="handleFile(this.files)">
+                <div class="text-7xl mb-6 group-hover:scale-110 transition-transform">📄</div>
+                <p class="text-slate-600 font-bold text-lg">คลิกเพื่อเลือกไฟล์ Excel (.xlsx)</p>
+                <p class="text-[10px] text-slate-400 uppercase tracking-[0.2em] mt-3">Upload to Flask Backend for
+                    processing</p>
+            </div>
+
+            <div id="status-area" class="mt-8 hidden">
+                <div class="bg-indigo-600 p-5 rounded-2xl flex justify-between items-center shadow-xl">
+                    <div class="flex items-center space-x-3 text-white">
+                        <span class="text-lg">📁</span>
+                        <span id="file-name" class="font-bold text-sm tracking-tight"></span>
+                    </div>
+                    <button onclick="startUpload()"
+                        class="bg-white text-indigo-600 px-10 py-3 rounded-xl font-black text-xs uppercase hover:bg-slate-100 active:scale-95 transition-all shadow-md">
+                        Process Data 🚀
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- ระบบจัดการไฟล์ ---
+        let selectedFile = null;
+
+        function handleFile(files) {
+            if (files.length > 0) {
+                selectedFile = files[0];
+                document.getElementById('file-name').innerText = selectedFile.name;
+                document.getElementById('status-area').classList.remove('hidden');
+            }
+        }
+
+        async function startUpload() {
+            if (!selectedFile) return;
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            try {
+                // ยิง Request ไปที่ API ของ Flask
+                const res = await fetch('/api/import_excel', { method: 'POST', body: formData });
+                const result = await res.json();
+
+                if (result.success) {
+                    alert(result.message);
+                    window.location.href = "{{ url_for('student_list_page') }}";
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (err) {
+                alert('Connection to Flask API failed');
+            }
+        }
+
+        // --- ระบบ Dropdown (ที่หายไป) ---
+        function toggleDropdown() {
+            const menu = document.getElementById('user-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        // ปิดเมนูเมื่อคลิกนอกพื้นที่
+        window.onclick = function (event) {
+            if (!event.target.closest('.relative')) {
+                const menu = document.getElementById('user-menu');
+                if (menu && !menu.classList.contains('hidden')) {
+                    menu.classList.add('hidden');
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>
