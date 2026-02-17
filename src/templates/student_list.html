@@ -3,41 +3,38 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>รายชื่อนักเรียน - IEP System</title>
+    <title>รายชื่อนักเรียน - IEP Smart Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .modal-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .modal-content::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+    </style>
 </head>
 
-<body class="bg-slate-50 min-h-screen font-sans">
+<body class="bg-gray-100 min-h-screen flex flex-col font-sans">
 
     <nav class="bg-indigo-900 text-white shadow-lg mb-8 font-sans">
         <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center text-sm font-medium">
             <div class="flex items-center space-x-10">
-                <div class="font-bold text-xl uppercase italic tracking-tighter border-r border-indigo-700 pr-10">
-                    IEP Smart Assistant
-                </div>
-
+                <div class="font-bold text-xl uppercase italic tracking-tighter border-r border-indigo-700 pr-10">IEP
+                    Smart Assistant</div>
                 <div class="flex space-x-8">
-                    <a href="{{ url_for('chatbot_page') }}"
-                        class="{% if request.endpoint == 'chatbot_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">Chatbot
-                        AI</a>
-
+                    <a href="{{ url_for('chatbot_page') }}" class="hover:text-indigo-300 transition">Chatbot AI</a>
                     <a href="{{ url_for('student_list_page') }}"
-                        class="{% if request.endpoint == 'student_list_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">รายชื่อนักเรียน</a>
-
+                        class="border-b-2 border-white pb-1">รายชื่อนักเรียน</a>
                     {% if session['permission'] == 'Admin' %}
-                    <a href="{{ url_for('import_page') }}"
-                        class="{% if request.endpoint == 'import_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">นำเข้าข้อมูล</a>
-
-                    <a href="{{ url_for('admin_dashboard') }}"
-                        class="{% if request.endpoint == 'admin_dashboard' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">Dashboard</a>
-
-                    <a href="{{ url_for('register_page') }}"
-                        class="{% if request.endpoint == 'register_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">ลงทะเบียน</a>
+                    <a href="{{ url_for('import_page') }}" class="hover:text-indigo-300 transition">นำเข้าข้อมูล</a>
+                    <a href="{{ url_for('admin_dashboard') }}" class="hover:text-indigo-300 transition">Dashboard</a>
+                    <a href="{{ url_for('register_page') }}" class="hover:text-indigo-300 transition">ลงทะเบียน</a>
                     {% endif %}
                 </div>
             </div>
-
             <div class="relative">
                 <button onclick="toggleDropdown()"
                     class="bg-indigo-800 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition flex items-center shadow-md outline-none">
@@ -45,9 +42,9 @@
                 </button>
                 <div id="user-menu"
                     class="absolute right-0 w-48 mt-2 py-2 bg-white rounded-xl shadow-xl hidden z-50 text-slate-700 border border-slate-100">
-                    <a href="{{ url_for('setting_page') }}" class="block px-4 py-2 hover:bg-indigo-50 transition">⚙️
-                        ตั้งค่า (Settings)</a>
-                    <hr class="my-1 border-slate-100">
+                    <a href="{{ url_for('setting_page') }}"
+                        class="block px-4 py-2 hover:bg-indigo-50 transition text-xs">⚙️ ตั้งค่า (Settings)</a>
+                    <hr class="my-1">
                     <a href="/logout"
                         class="block px-4 py-2 text-sm text-rose-600 font-bold hover:bg-rose-50 transition">ออกจากระบบ</a>
                 </div>
@@ -55,66 +52,130 @@
         </div>
     </nav>
 
-    <div class="max-w-6xl mx-auto px-8">
-        <div class="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
-            <div class="p-8 border-b border-slate-100 flex justify-between items-center bg-white">
+    <main class="max-w-7xl mx-auto w-full px-6 pb-12">
+        <div class="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
+            <div class="p-8 border-b border-gray-50 flex justify-between items-center">
                 <div>
-                    <h2 class="text-2xl font-bold text-slate-800 uppercase tracking-tight">รายชื่อนักเรียนในระบบ</h2>
-                    <p class="text-sm text-slate-400 mt-1 italic">แสดงข้อมูลพื้นฐานของนักเรียนทั้งหมด</p>
-                </div>
-                <div class="relative">
-                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">🔍</span>
-                    <input type="text" placeholder="ค้นหารายชื่อ..."
-                        class="pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition w-64 bg-slate-50">
+                    <h2 class="text-2xl font-extrabold text-gray-800">รายชื่อนักเรียน</h2>
+                    <p class="text-gray-400 text-sm italic">พบข้อมูลทั้งหมด {{ students|length }} รายการ</p>
                 </div>
             </div>
 
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse">
-                    <thead class="bg-slate-50 text-slate-500 uppercase text-xs font-bold">
-                        <tr>
-                            <th class="px-8 py-4">ลำดับ</th>
-                            <th class="px-8 py-4">รหัสนักเรียน</th>
-                            <th class="px-8 py-4">ชื่อ-นามสกุล</th>
-                            <th class="px-8 py-4">ระดับชั้น</th>
-                            <th class="px-8 py-4 text-center">สถานะ</th>
+                    <thead>
+                        <tr
+                            class="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                            <th class="px-8 py-5">ลำดับ</th>
+                            <th class="px-8 py-5">ชื่อ-นามสกุล</th>
+                            <th class="px-8 py-5 text-center">ชั้นเรียน</th>
+                            <th class="px-8 py-5">ความบกพร่อง</th>
+                            <th class="px-8 py-5 text-right">จัดการ</th>
                         </tr>
                     </thead>
-
+                    <tbody class="divide-y divide-gray-50 text-sm">
+                        {% for student in students %}
+                        <tr class="hover:bg-indigo-50/30 transition">
+                            <td class="px-8 py-4 font-mono text-gray-300 text-xs">{{ loop.index }}</td>
+                            <td class="px-8 py-4 font-bold text-gray-700">{{ student.fullname }}</td>
+                            <td class="px-8 py-4 text-center">
+                                <span
+                                    class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-lg font-bold text-[10px]">{{
+                                    student.grade }}</span>
+                            </td>
+                            <td class="px-8 py-4 text-gray-500">{{ student.disability_type or '-' }}</td>
+                            <td class="px-8 py-4 text-right">
+                                <button data-name="{{ student.fullname }}" data-grade="{{ student.grade }}"
+                                    data-disability="{{ student.disability_type or 'ไม่ระบุ' }}"
+                                    data-notes="{{ student.notes or student.details or 'ไม่มีรายละเอียดเพิ่มเติม' }}"
+                                    onclick="openModal(this)"
+                                    class="bg-indigo-600 text-white px-5 py-2 rounded-xl font-bold text-xs hover:bg-indigo-700 transition-all shadow-md active:scale-95">
+                                    ดูรายละเอียด
+                                </button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="px-8 py-20 text-center text-gray-400 italic">ไม่พบข้อมูลนักเรียน</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
                 </table>
             </div>
+        </div>
+    </main>
 
-            <div
-                class="p-6 bg-slate-50 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400 italic">
-                <span>* ข้อมูลล่าสุดอัปเดตเมื่อ: {{ session['current_time'] if 'current_time' in session else 'ปัจจุบัน'
-                    }}</span>
-                <div class="space-x-2">
-                    <button
-                        class="px-3 py-1 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition shadow-sm">ก่อนหน้า</button>
-                    <button
-                        class="px-3 py-1 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition shadow-sm">ถัดไป</button>
+    <div id="detail-modal"
+        class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl overflow-hidden flex flex-col scale-95 transition-transform duration-300"
+            id="modal-box">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-indigo-50/50">
+                <h3 class="text-lg font-black text-indigo-900 uppercase">ข้อมูลเชิงลึก</h3>
+                <button onclick="closeModal()"
+                    class="text-gray-400 hover:text-rose-500 transition text-2xl font-bold">×</button>
+            </div>
+
+            <div class="p-8 space-y-6">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">นักเรียน</label>
+                        <p id="m-name" class="text-xl font-bold text-slate-700"></p>
+                    </div>
+                    <div class="text-right">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">ชั้น</label>
+                        <p id="m-grade" class="text-xl font-bold text-indigo-600"></p>
+                    </div>
                 </div>
+
+                <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">ความบกพร่อง</label>
+                    <p id="m-disability" class="mt-1 text-sm font-bold text-rose-600"></p>
+                </div>
+
+                <div class="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">ปัญหาที่พบ
+                        / รายละเอียดเพิ่มเติม</label>
+                    <p id="m-notes" class="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap italic"></p>
+                </div>
+            </div>
+
+            <div class="p-6 bg-gray-50 text-center">
+                <button onclick="closeModal()"
+                    class="w-full bg-white border border-gray-200 text-gray-600 py-3 rounded-2xl font-bold text-sm hover:bg-gray-100 transition shadow-sm">ปิดหน้าต่าง</button>
             </div>
         </div>
     </div>
 
     <script>
-        function toggleDropdown() {
-            const menu = document.getElementById('user-menu');
-            menu.classList.toggle('hidden');
+        function toggleDropdown() { document.getElementById('user-menu').classList.toggle('hidden'); }
+
+        // แก้ไขฟังก์ชันใหม่: รับค่าจาก attribute ของปุ่ม (เลิกใช้ JSON พังๆ)
+        function openModal(btn) {
+            document.getElementById('m-name').innerText = btn.getAttribute('data-name');
+            document.getElementById('m-grade').innerText = btn.getAttribute('data-grade');
+            document.getElementById('m-disability').innerText = btn.getAttribute('data-disability');
+            document.getElementById('m-notes').innerText = btn.getAttribute('data-notes');
+
+            const modal = document.getElementById('detail-modal');
+            const box = document.getElementById('modal-box');
+            modal.classList.remove('hidden');
+            setTimeout(() => box.classList.remove('scale-95'), 10);
+            document.body.style.overflow = 'hidden';
         }
 
-        // คลิกที่อื่นเพื่อปิดเมนู
-        window.onclick = function (event) {
-            if (!event.target.closest('.relative')) {
-                const menu = document.getElementById('user-menu');
-                if (menu && !menu.classList.contains('hidden')) {
-                    menu.classList.add('hidden');
-                }
-            }
+        function closeModal() {
+            const modal = document.getElementById('detail-modal');
+            const box = document.getElementById('modal-box');
+            box.classList.add('scale-95');
+            setTimeout(() => modal.classList.add('hidden'), 200);
+            document.body.style.overflow = 'auto';
+        }
+
+        window.onclick = function (e) {
+            if (e.target == document.getElementById('detail-modal')) closeModal();
+            if (!e.target.closest('.relative')) document.getElementById('user-menu')?.classList.add('hidden');
         }
     </script>
-
 </body>
 
 </html>
