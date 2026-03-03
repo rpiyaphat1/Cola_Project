@@ -12,7 +12,10 @@ try:
 except ImportError:
     pass
 
-app = Flask(__name__)
+# --- จุดสำคัญ: แก้ไขเพื่อให้หา Templates เจอนอกโฟลเดอร์ src ---
+app = Flask(__name__, 
+            template_folder="../templates", 
+            static_folder="../static")
 
 # --- 1. จัดการความลับ (Environment Variables) ---
 app.secret_key = os.environ.get('FLASK_SECRET_KEY')
@@ -22,7 +25,7 @@ AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 # ตัวแปรควบคุมสถานะบันทึกแชท (Global Variable)
 SAVE_CHAT_ENABLED = False
 
-# --- 2. Database Config (รองรับ Vercel Postgres / Neon / Prisma) ---
+# --- 2. Database Config (รองรับ Vercel Postgres) ---
 db_url = os.environ.get('DATABASE_URL')
 if db_url:
     # แก้ไข Protocol ให้ SQLAlchemy และ pg8000 ทำงานร่วมกันได้
@@ -100,7 +103,6 @@ def ask_ai():
         db.session.add(ChatHistory(username=username, role='user', message=user_input))
         db.session.commit()
 
-    # ดึงข้อมูลนักเรียนตามสิทธิ์ (รายห้อง หรือ รายคน)
     if permission == 'Admin':
         students = Student.query.all()
     else:
@@ -117,7 +119,7 @@ def ask_ai():
     
     try:
         res = requests.post(f"{AI_BASE_URL}/chat/completions", headers={"Authorization": f"Bearer {AI_API_KEY}"}, 
-                            json={"model": "gemini-2.5-flash", "messages": [{"role": "user", "content": prompt}]}, timeout=30)
+                            json={"model": "gemini-2.0-flash", "messages": [{"role": "user", "content": prompt}]}, timeout=30)
         reply = res.json()['choices'][0]['message']['content'] if res.status_code == 200 else "AI Error"
         
         if SAVE_CHAT_ENABLED and res.status_code == 200:
@@ -149,6 +151,7 @@ def login_page(): return render_template('login.html')
 def login():
     u, p = request.form.get('username', '').lower().strip(), request.form.get('password', '')
     user = User.query.get(u)
+    # ใช้ check_password_hash เพื่อความปลอดภัย
     if user and check_password_hash(user.password, p):
         session.update({'username': user.username, 'displayname': user.displayname, 'permission': user.permission})
         return redirect(url_for('admin_dashboard' if user.permission == 'Admin' else 'chatbot_page'))
@@ -164,7 +167,7 @@ def admin_dashboard():
     all_grades = [g[0] for g in db.session.query(Student.grade).distinct().all() if g[0]]
     return render_template('admin_dashboard.html', users=users, all_students=all_students, all_grades=all_grades)
 
-# --- 7. Access Control API (แก้ไข Logic ให้แอดรายคนได้แม่นยำ) ---
+# --- 7. Access Control API ---
 @app.route('/api/get_user_access/<username>')
 @login_required
 @admin_required
@@ -177,15 +180,10 @@ def get_user_access(username):
 @admin_required
 def grant_access():
     data = request.json
-    username = data.get('username')
-    grade = data.get('grade')
-    student_id = data.get('student_id')
-
-    # บันทึก ID เป็น Integer เพื่อให้ Foreign Key ทำงานถูกต้อง
     new_access = UserAccess(
-        username=username,
-        accessible_grade=grade if grade else None,
-        accessible_student_id=int(student_id) if student_id else None
+        username=data.get('username'),
+        accessible_grade=data.get('grade') if data.get('grade') else None,
+        accessible_student_id=int(data.get('student_id')) if data.get('student_id') else None
     )
     db.session.add(new_access)
     db.session.commit()
@@ -200,23 +198,12 @@ def revoke_access(access_id):
         db.session.delete(acc); db.session.commit()
     return jsonify({"success": True})
 
-@app.route('/update_user/<username>', methods=['POST'])
-@login_required
-@admin_required
-def update_user(username):
-    user = User.query.get(username)
-    if user:
-        data = request.get_json()
-        user.displayname = data.get('displayname', user.displayname)
-        user.permission = data.get('permission', user.permission)
-        db.session.commit()
-        return jsonify({"success": True})
-    return jsonify({"success": False}), 404
-
 # --- 8. Navigation & Pages ---
 @app.route('/chatbot')
 @login_required
-def chatbot_page(): return render_template('Chatbot.html')
+def chatbot_page(): 
+    # ตรวจสอบชื่อไฟล์ให้ตรงกับใน templates (chatbot.html vs Chatbot.html)
+    return render_template('chatbot.html') 
 
 @app.route('/student_list_page')
 @login_required
