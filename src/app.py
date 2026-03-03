@@ -12,10 +12,8 @@ try:
 except ImportError:
     pass
 
-# --- จุดสำคัญ: แก้ไขเพื่อให้หา Templates เจอนอกโฟลเดอร์ src ---
-app = Flask(__name__, 
-            template_folder="../templates", 
-            static_folder="../static")
+# --- จุดที่แก้: ในเมื่อ templates อยู่ใน src แล้ว ไม่ต้องระบุ path ย้อนกลับ ---
+app = Flask(__name__) 
 
 # --- 1. จัดการความลับ (Environment Variables) ---
 app.secret_key = os.environ.get('FLASK_SECRET_KEY')
@@ -25,17 +23,17 @@ AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 # ตัวแปรควบคุมสถานะบันทึกแชท (Global Variable)
 SAVE_CHAT_ENABLED = False
 
-# --- 2. Database Config (รองรับ Vercel Postgres) ---
-# แก้จาก DATABASE_URL เป็นชื่อที่พี่มีจริงใน Vercel
-db_url = os.environ.get('DATABASE_URL_POSTGRES_URL')
+# --- 2. Database Config ---
+# ดึงค่าจาก DATABASE_URL ซึ่งเป็นมาตรฐานที่ Vercel สร้างให้เอง
+db_url = os.environ.get('DATABASE_URL')
 if db_url:
-    # แก้ไข Protocol ให้ SQLAlchemy และ pg8000 ทำงานร่วมกันได้
+    # แก้ไข Protocol ให้รองรับ pg8000
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql+pg8000://", 1)
     elif db_url.startswith("postgresql://") and "+pg8000" not in db_url:
         db_url = db_url.replace("postgresql://", "postgresql+pg8000://", 1)
     
-    # บังคับใช้ SSL Mode สำหรับฐานข้อมูลบน Cloud
+    # บังคับใช้ SSL Mode
     if "sslmode" not in db_url:
         separator = "&" if "?" in db_url else "?"
         db_url += f"{separator}sslmode=require"
@@ -50,7 +48,7 @@ class User(db.Model):
     username = db.Column(db.String(80), primary_key=True)
     password = db.Column(db.String(300), nullable=False)
     displayname = db.Column(db.String(100), nullable=False)
-    permission = db.Column(db.String(20), default='Teacher') # Admin, Teacher, Parent
+    permission = db.Column(db.String(20), default='Teacher')
 
 class Student(db.Model):
     __tablename__ = 'students'
@@ -71,7 +69,7 @@ class ChatHistory(db.Model):
     __tablename__ = 'chat_history'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), db.ForeignKey('users.username'), nullable=False)
-    role = db.Column(db.String(20)) # 'user' หรือ 'ai'
+    role = db.Column(db.String(20)) 
     message = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=db.func.now())
 
@@ -119,7 +117,7 @@ def ask_ai():
     prompt = f"คุณคือผู้ช่วยของ{role_th} ข้อมูลนักเรียนที่คุณเข้าถึงได้คือ:\n{ctx}\nคำถาม: {user_input}"
     
     try:
-        res = requests.post(f"{AI_BASE_URL}/chat/completions", headers={"Authorization": f"Bearer {AI_API_KEY}"}, 
+        res = requests.post(f"{AI_API_URL}/chat/completions", headers={"Authorization": f"Bearer {AI_API_KEY}"}, 
                             json={"model": "gemini-2.0-flash", "messages": [{"role": "user", "content": prompt}]}, timeout=30)
         reply = res.json()['choices'][0]['message']['content'] if res.status_code == 200 else "AI Error"
         
@@ -152,7 +150,6 @@ def login_page(): return render_template('login.html')
 def login():
     u, p = request.form.get('username', '').lower().strip(), request.form.get('password', '')
     user = User.query.get(u)
-    # ใช้ check_password_hash เพื่อความปลอดภัย
     if user and check_password_hash(user.password, p):
         session.update({'username': user.username, 'displayname': user.displayname, 'permission': user.permission})
         return redirect(url_for('admin_dashboard' if user.permission == 'Admin' else 'chatbot_page'))
@@ -203,7 +200,6 @@ def revoke_access(access_id):
 @app.route('/chatbot')
 @login_required
 def chatbot_page(): 
-    # ตรวจสอบชื่อไฟล์ให้ตรงกับใน templates (chatbot.html vs Chatbot.html)
     return render_template('chatbot.html') 
 
 @app.route('/student_list_page')
