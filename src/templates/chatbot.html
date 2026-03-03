@@ -16,28 +16,18 @@
                 <div class="font-bold text-xl uppercase italic tracking-tighter border-r border-indigo-700 pr-10">
                     IEP Smart Assistant
                 </div>
-
                 <div class="flex space-x-8">
                     <a href="{{ url_for('chatbot_page') }}"
                         class="{% if request.endpoint == 'chatbot_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">Chatbot
                         AI</a>
-
                     <a href="{{ url_for('student_list_page') }}"
                         class="{% if request.endpoint == 'student_list_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">รายชื่อนักเรียน</a>
-
                     {% if session['permission'] == 'Admin' %}
-                    <a href="{{ url_for('import_page') }}"
-                        class="{% if request.endpoint == 'import_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">นำเข้าข้อมูล</a>
-
                     <a href="{{ url_for('admin_dashboard') }}"
                         class="{% if request.endpoint == 'admin_dashboard' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">Dashboard</a>
-
-                    <a href="{{ url_for('register_page') }}"
-                        class="{% if request.endpoint == 'register_page' %}border-b-2 border-white pb-1{% else %}hover:text-indigo-300 transition{% endif %}">ลงทะเบียน</a>
                     {% endif %}
                 </div>
             </div>
-
             <div class="relative">
                 <button onclick="toggleDropdown()"
                     class="bg-indigo-800 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition flex items-center shadow-md outline-none">
@@ -67,12 +57,22 @@
                         <h2 class="font-bold text-slate-800 text-lg uppercase">IEP Smart Assistant</h2>
                         <p class="text-[10px] text-emerald-500 font-bold flex items-center uppercase">
                             <span class="w-2 h-2 bg-emerald-500 rounded-full mr-1 animate-pulse"></span> Online (Gemini
-                            2.0 Pro)
+                            2.5 Flash)
                         </p>
                     </div>
                 </div>
-                <button onclick="clearChat()"
-                    class="text-xs text-slate-400 hover:text-rose-500 transition font-medium italic uppercase tracking-widest outline-none">ล้างการสนทนา</button>
+
+                <div class="flex items-center space-x-4">
+                    {% if session['permission'] == 'Admin' %}
+                    <button id="chat-toggle-btn" onclick="toggleChatSystem()"
+                        class="bg-slate-200 text-slate-500 px-4 py-2 rounded-xl text-[10px] font-bold shadow-sm transition-all active:scale-95 border border-slate-300">
+                        🔌 บันทึกแชท: ปิด
+                    </button>
+                    {% endif %}
+
+                    <button onclick="clearChat()"
+                        class="text-xs text-slate-400 hover:text-rose-500 transition font-medium italic uppercase tracking-widest outline-none">ล้างการสนทนา</button>
+                </div>
             </div>
 
             <div id="chat-box" class="flex-grow overflow-y-auto p-8 space-y-6 bg-slate-50/50">
@@ -80,7 +80,7 @@
                     <div
                         class="bg-white border border-slate-200 p-5 rounded-3xl rounded-tl-none max-w-[70%] shadow-sm text-sm text-slate-700 leading-relaxed">
                         สวัสดีครับคุณ <strong>{{ session['displayname'] }}</strong> ผมคือ AI IEP SmartAssistant
-                        ผู้ช่วยของคุณ มีอะไรให้ผมช่วยในวันนี้ครับ?
+                        ยินดีที่ได้ช่วยเหลือครับ
                     </div>
                 </div>
             </div>
@@ -100,7 +100,52 @@
     <script>
         const chatBox = document.getElementById('chat-box');
         const userInput = document.getElementById('user-input');
+        let isChatEnabled = false;
 
+        // ฟังก์ชันจัดการระบบบันทึกแชท
+        async function checkChatStatus() {
+            try {
+                const res = await fetch('/api/get_chat_status');
+                const data = await res.json();
+                isChatEnabled = data.enabled;
+                updateChatBtnUI();
+            } catch (e) { console.error("Error loading chat status"); }
+        }
+
+        async function toggleChatSystem() {
+            isChatEnabled = !isChatEnabled;
+            try {
+                const res = await fetch('/api/toggle_chat_save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: isChatEnabled })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    updateChatBtnUI();
+                    alert(isChatEnabled ? 'เปิดระบบบันทึกแชทแล้ว ข้อมูลจะถูกเก็บลง Database' : 'ปิดระบบบันทึกแชทแล้ว');
+                }
+            } catch (e) { alert('เกิดข้อผิดพลาดในการสลับสถานะ'); }
+        }
+
+        function updateChatBtnUI() {
+            const btn = document.getElementById('chat-toggle-btn');
+            if (!btn) return;
+            if (isChatEnabled) {
+                btn.className = "bg-purple-600 text-white px-4 py-2 rounded-xl text-[10px] font-bold shadow-md transition-all active:scale-95 border border-purple-400";
+                btn.innerText = '✅ บันทึกแชท: เปิด';
+            } else {
+                btn.className = "bg-slate-200 text-slate-500 px-4 py-2 rounded-xl text-[10px] font-bold shadow-sm transition-all active:scale-95 border border-slate-300";
+                btn.innerText = '🔌 บันทึกแชท: ปิด';
+            }
+        }
+
+        // เรียกเช็คสถานะตอนโหลดหน้าเว็บ
+        {% if session['permission'] == 'Admin' %}
+        checkChatStatus();
+        {% endif %}
+
+        // ฟังก์ชันส่งข้อความ (คงเดิม)
         function sendMessage() {
             const message = userInput.value.trim();
             if (!message) return;
