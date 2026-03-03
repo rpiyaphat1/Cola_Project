@@ -26,7 +26,8 @@ AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 SAVE_CHAT_ENABLED = False
 
 # --- 2. Database Config (รองรับ Vercel Postgres) ---
-db_url = os.environ.get('DATABASE_URL')
+# แก้จาก DATABASE_URL เป็นชื่อที่พี่มีจริงใน Vercel
+db_url = os.environ.get('DATABASE_URL_POSTGRES_URL')
 if db_url:
     # แก้ไข Protocol ให้ SQLAlchemy และ pg8000 ทำงานร่วมกันได้
     if db_url.startswith("postgres://"):
