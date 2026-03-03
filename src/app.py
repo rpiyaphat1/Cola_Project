@@ -12,7 +12,7 @@ try:
 except ImportError:
     pass
 
-# --- จุดที่แก้: ในเมื่อ templates อยู่ใน src แล้ว ไม่ต้องระบุ path ย้อนกลับ ---
+# --- จุดสำคัญ: ในเมื่อทุกอย่างอยู่ใน src แล้ว ใช้ค่า Default ได้เลย ---
 app = Flask(__name__) 
 
 # --- 1. จัดการความลับ (Environment Variables) ---
@@ -20,23 +20,25 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY')
 AI_API_KEY = os.environ.get('AI_API_KEY')
 AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 
-# ตัวแปรควบคุมสถานะบันทึกแชท (Global Variable)
+# ตัวแปรควบคุมสถานะบันทึกแชท
 SAVE_CHAT_ENABLED = False
 
-# --- 2. Database Config ---
-# ดึงค่าจาก DATABASE_URL ซึ่งเป็นมาตรฐานที่ Vercel สร้างให้เอง
+# --- 2. Database Config (ฉบับแก้ sslmode ให้ pg8000) ---
 db_url = os.environ.get('DATABASE_URL')
+
 if db_url:
-    # แก้ไข Protocol ให้รองรับ pg8000
+    # แก้ไข Protocol ให้เป็น postgresql+pg8000
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql+pg8000://", 1)
     elif db_url.startswith("postgresql://") and "+pg8000" not in db_url:
         db_url = db_url.replace("postgresql://", "postgresql+pg8000://", 1)
     
-    # บังคับใช้ SSL Mode
-    if "sslmode" not in db_url:
-        separator = "&" if "?" in db_url else "?"
-        db_url += f"{separator}sslmode=require"
+    # กำจัดตัวปัญหา sslmode เพราะ pg8000 ไม่รองรับผ่าน URL String
+    if "?" in db_url:
+        base_url, query = db_url.split("?", 1)
+        # กรองเอาเฉพาะ parameter ที่ไม่ใช่ sslmode
+        params = [p for p in query.split("&") if not p.startswith("sslmode=")]
+        db_url = base_url + ("?" + "&".join(params) if params else "")
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -117,7 +119,8 @@ def ask_ai():
     prompt = f"คุณคือผู้ช่วยของ{role_th} ข้อมูลนักเรียนที่คุณเข้าถึงได้คือ:\n{ctx}\nคำถาม: {user_input}"
     
     try:
-        res = requests.post(f"{AI_API_URL}/chat/completions", headers={"Authorization": f"Bearer {AI_API_KEY}"}, 
+        # ใช้ AI_BASE_URL ที่ประกาศไว้ข้างบน
+        res = requests.post(f"{AI_BASE_URL}/chat/completions", headers={"Authorization": f"Bearer {AI_API_KEY}"}, 
                             json={"model": "gemini-2.0-flash", "messages": [{"role": "user", "content": prompt}]}, timeout=30)
         reply = res.json()['choices'][0]['message']['content'] if res.status_code == 200 else "AI Error"
         
@@ -150,6 +153,7 @@ def login_page(): return render_template('login.html')
 def login():
     u, p = request.form.get('username', '').lower().strip(), request.form.get('password', '')
     user = User.query.get(u)
+    # ตรวจสอบรหัสผ่านแบบ Hash เพื่อความปลอดภัย
     if user and check_password_hash(user.password, p):
         session.update({'username': user.username, 'displayname': user.displayname, 'permission': user.permission})
         return redirect(url_for('admin_dashboard' if user.permission == 'Admin' else 'chatbot_page'))
@@ -199,8 +203,7 @@ def revoke_access(access_id):
 # --- 8. Navigation & Pages ---
 @app.route('/chatbot')
 @login_required
-def chatbot_page(): 
-    return render_template('chatbot.html') 
+def chatbot_page(): return render_template('chatbot.html') 
 
 @app.route('/student_list_page')
 @login_required
