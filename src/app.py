@@ -23,24 +23,25 @@ AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 # ตัวแปรควบคุมสถานะบันทึกแชท
 SAVE_CHAT_ENABLED = False
 
-# --- 2. Database Config (ฉบับแก้ sslmode ให้ pg8000) ---
+# --- 2. Database Config (ฉบับแก้ Network Error / SSL) ---
 db_url = os.environ.get('DATABASE_URL')
 
 if db_url:
-    # แก้ไข Protocol ให้เป็น postgresql+pg8000
+    # 1. ตัด parameter ทั้งหมดทิ้งเพื่อให้ได้ URL สะอาดๆ
+    if "?" in db_url:
+        db_url = db_url.split("?")[0]
+        
+    # 2. แก้ไข Protocol ให้เป็น postgresql+pg8000
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql+pg8000://", 1)
     elif db_url.startswith("postgresql://") and "+pg8000" not in db_url:
         db_url = db_url.replace("postgresql://", "postgresql+pg8000://", 1)
-    
-    # กำจัดตัวปัญหา sslmode เพราะ pg8000 ไม่รองรับผ่าน URL String
-    if "?" in db_url:
-        base_url, query = db_url.split("?", 1)
-        # กรองเอาเฉพาะ parameter ที่ไม่ใช่ sslmode
-        params = [p for p in query.split("&") if not p.startswith("sslmode=")]
-        db_url = base_url + ("?" + "&".join(params) if params else "")
 
+# 3. จุดสำคัญ: สั่งเปิด SSL ผ่าน Engine Options แทนการใส่ใน URL string
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    "connect_args": {"ssl_context": True}
+}
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -119,7 +120,6 @@ def ask_ai():
     prompt = f"คุณคือผู้ช่วยของ{role_th} ข้อมูลนักเรียนที่คุณเข้าถึงได้คือ:\n{ctx}\nคำถาม: {user_input}"
     
     try:
-        # ใช้ AI_BASE_URL ที่ประกาศไว้ข้างบน
         res = requests.post(f"{AI_BASE_URL}/chat/completions", headers={"Authorization": f"Bearer {AI_API_KEY}"}, 
                             json={"model": "gemini-2.0-flash", "messages": [{"role": "user", "content": prompt}]}, timeout=30)
         reply = res.json()['choices'][0]['message']['content'] if res.status_code == 200 else "AI Error"
@@ -153,7 +153,6 @@ def login_page(): return render_template('login.html')
 def login():
     u, p = request.form.get('username', '').lower().strip(), request.form.get('password', '')
     user = User.query.get(u)
-    # ตรวจสอบรหัสผ่านแบบ Hash เพื่อความปลอดภัย
     if user and check_password_hash(user.password, p):
         session.update({'username': user.username, 'displayname': user.displayname, 'permission': user.permission})
         return redirect(url_for('admin_dashboard' if user.permission == 'Admin' else 'chatbot_page'))
