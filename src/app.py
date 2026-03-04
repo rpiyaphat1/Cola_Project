@@ -20,11 +20,11 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_secret_key_2026')
 AI_API_KEY = os.environ.get('AI_API_KEY')
 AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 
-# --- 2. Database Config (ดักตบ URI ให้วิ่งเข้า Database 'users') ---
+# --- 2. Database Config (ดักตบ URI ให้วิ่งเข้า Database 'users' ตามรูป Cluster0) ---
 raw_uri = os.environ.get('MONGODB_URI')
 
 if raw_uri:
-    # ดึงชื่อ Database 'users' มาคั่นกลางก่อนเครื่องหมาย ? ตามที่พี่บอก
+    # แก้ปัญหา URI จาก Vercel ที่ไม่มีชื่อ Database คั่นกลาง
     if ".net/?" in raw_uri:
         final_uri = raw_uri.replace(".net/?", ".net/users?")
     elif raw_uri.endswith(".net/"):
@@ -73,6 +73,7 @@ def ask_ai():
             "timestamp": ObjectId()
         })
 
+    # ดึงข้อมูลนักเรียนจาก Database 'users'
     if permission == 'Admin':
         students_cursor = mongo.db.students.find()
     else:
@@ -88,8 +89,7 @@ def ask_ai():
 
     students = list(students_cursor)
     ctx = "\n".join([f"- {s.get('fullname')} ({s.get('grade')}): {s.get('disability_type','')}" for s in students])
-    role_th = "คุณครู" if permission == 'Teacher' else "ผู้ปกครอง"
-    if permission == 'Admin': role_th = "ผู้ดูแล"
+    role_th = "ผู้ดูแล" if permission == 'Admin' else "คุณครู"
 
     prompt = f"คุณคือผู้ช่วยของ{role_th} ข้อมูลนักเรียนที่คุณเข้าถึงได้คือ:\n{ctx}\nคำถาม: {user_input}"
     
@@ -113,11 +113,6 @@ def toggle_chat_save():
     SAVE_CHAT_ENABLED = request.json.get('enabled', False)
     return jsonify({"success": True, "enabled": SAVE_CHAT_ENABLED})
 
-@app.route('/api/get_chat_status')
-@login_required
-def get_chat_status():
-    return jsonify({"enabled": SAVE_CHAT_ENABLED})
-
 # --- 5. Auth & User Management ---
 @app.route('/')
 def login_page(): return render_template('login.html')
@@ -127,10 +122,11 @@ def login():
     u = request.form.get('username', '').lower().strip()
     p = request.form.get('password', '').strip()
     
-    # ดึงจาก Collection 'users' ใน Database 'users'
+    # ค้นหาในตาราง 'users' ตามรูป image_02c9eb.jpg
     user = mongo.db.users.find_one({"username": u})
     
     if user:
+        # เทียบ Hash รหัสผ่าน
         if check_password_hash(user['password'], p):
             session.update({
                 'username': user['username'], 
