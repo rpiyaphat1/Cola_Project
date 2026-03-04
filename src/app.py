@@ -20,29 +20,21 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_secret_key_2026')
 AI_API_KEY = os.environ.get('AI_API_KEY')
 AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 
-# --- 2. Database Config (ฉบับดัดหลัง Vercel บังคับเข้า Database 'IEP') ---
+# --- 2. Database Config (บังคับเข้า IEP เพื่อแก้ปัญหา Vercel Integration ล็อค URI) ---
 raw_uri = os.environ.get('MONGODB_URI')
-
 if raw_uri:
-    # ดักแก้ URI ให้ชี้ไปที่ Database 'IEP' เสมอ
+    # ดักตบให้ชี้ไปที่ IEP เสมอ
     if ".net/?" in raw_uri:
         final_uri = raw_uri.replace(".net/?", ".net/IEP?")
     elif raw_uri.endswith(".net/"):
         final_uri = raw_uri + "IEP"
-    elif ".net" in raw_uri and "/IEP" not in raw_uri:
-        parts = raw_uri.split(".net")
-        if "?" in parts[1]:
-            option_part = parts[1][parts[1].find("?"):]
-            final_uri = parts[0] + ".net/IEP" + option_part
-        else:
-            final_uri = parts[0] + ".net/IEP"
     else:
         final_uri = raw_uri
 else:
     final_uri = None
 
-# พ่นค่าออกมาดูใน Vercel Log เพื่อเช็คความถูกต้อง
-print(f"DEBUG: Connecting to Database -> {final_uri}") 
+# ตะโกนบอกใน Log เพื่อเช็คว่าแก้ติดมั้ย
+print(f"!!! CURRENT DATABASE PATH -> {final_uri}") 
 
 app.config["MONGO_URI"] = final_uri
 mongo = PyMongo(app)
@@ -50,7 +42,7 @@ mongo = PyMongo(app)
 # ตัวแปรควบคุมสถานะบันทึกแชท
 SAVE_CHAT_ENABLED = False
 
-# --- 3. Middleware ---
+# --- 3. Middleware (สิทธิ์การเข้าถึง) ---
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -67,14 +59,14 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- 4. Route สำหรับ Favicon (ดึงจาก Root นอก src ตามโครงสร้างไฟล์พี่) ---
+# --- 4. Route สำหรับ Favicon (นอก src ตามโครงสร้างไฟล์พี่) ---
 @app.route('/favicon.ico')
 def favicon():
-    # ดึงไฟล์ favicon.ico จากตำแหน่งนอกโฟลเดอร์ src ตามรูป image_0246be.png
+    # ดึงไฟล์จากตำแหน่งนอก src ที่พี่วางไว้จริง
     return send_from_directory(os.path.abspath(os.path.join(app.root_path, '..')),
                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
-# --- 5. AI API & Chat Control ---
+# --- 5. AI API & Chat Control (บันทึกแชท/ดึงข้อมูลนักเรียน) ---
 @app.route('/ask_ai', methods=['POST'])
 @login_required
 def ask_ai():
@@ -87,7 +79,7 @@ def ask_ai():
             "username": username, "role": "user", "message": user_input, "timestamp": ObjectId()
         })
 
-    # ค้นหาข้อมูลนักเรียนใน Database 'IEP'
+    # ดึงข้อมูลนักเรียนตามสิทธิ์
     if permission == 'Admin':
         students_cursor = mongo.db.students.find()
     else:
@@ -102,10 +94,9 @@ def ask_ai():
         students_cursor = mongo.db.students.find({"$or": query_parts}) if query_parts else mongo.db.students.find({"_id": None})
 
     students = list(students_cursor)
-    ctx = "\n".join([f"- {s.get('fullname')} ({s.get('grade')}): {s.get('disability_type','')}" for s in students])
-    role_th = "ผู้ดูแล" if permission == 'Admin' else "คุณครู"
+    ctx = "\n".join([f"- {s.get('fullname')} ({s.get('grade')})" for s in students])
 
-    prompt = f"คุณคือผู้ช่วยของ{role_th} ข้อมูลนักเรียน: {ctx}\nคำถาม: {user_input}"
+    prompt = f"คุณคือผู้ช่วย ข้อมูลนักเรียน: {ctx}\nคำถาม: {user_input}"
     
     try:
         res = requests.post(f"{AI_BASE_URL}/chat/completions", headers={"Authorization": f"Bearer {AI_API_KEY}"}, 
@@ -131,28 +122,19 @@ def toggle_chat_save():
 def get_chat_status():
     return jsonify({"enabled": SAVE_CHAT_ENABLED})
 
-# --- 6. Auth & User Management (Login/Register) ---
+# --- 6. Auth (Login/Register) ---
 @app.route('/')
 def login_page(): return render_template('login.html')
 
 @app.route('/login', methods=['POST'])
 def login():
-    # รองรับตัวเล็ก/ตัวใหญ่ และตัดช่องว่าง
-    u = request.form.get('username', '').strip().lower()
+    u = request.form.get('username', '').strip().lower() # พิมพ์ Admin หรือ admin ก็ได้
     p = request.form.get('password', '').strip()
-    
     user = mongo.db.users.find_one({"username": u})
     
-    if user:
-        # Debug Log เช็คค่า Hash ใน DB
-        print(f"DEBUG: Found User '{u}' with Hash: '{user.get('password')}'")
-        if check_password_hash(user['password'], p):
-            session.update({
-                'username': user['username'], 
-                'displayname': user['displayname'], 
-                'permission': user['permission']
-            })
-            return redirect(url_for('admin_dashboard' if user['permission'] == 'Admin' else 'chatbot_page'))
+    if user and check_password_hash(user['password'], p):
+        session.update({'username': u, 'displayname': user['displayname'], 'permission': user['permission']})
+        return redirect(url_for('admin_dashboard' if user['permission'] == 'Admin' else 'chatbot_page'))
     
     flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'error')
     return redirect(url_for('login_page'))
@@ -166,33 +148,24 @@ def register():
     p = request.form.get('password', '').strip()
     d = request.form.get('displayname', '').strip()
     
-    if not u or not p:
-        flash('กรุณากรอกข้อมูลให้ครบถ้วน', 'error')
-        return redirect(url_for('register_page'))
-
-    # เช็คชื่อซ้ำก่อนสมัคร
-    if mongo.db.users.find_one({"username": u}):
+    if mongo.db.users.find_one({"username": u}): # ห้ามชื่อซ้ำ
         flash('ชื่อผู้ใช้นี้มีคนใช้แล้ว!', 'error')
         return redirect(url_for('register_page'))
 
     mongo.db.users.insert_one({
-        "username": u,
-        "password": generate_password_hash(p),
-        "displayname": d if d else u,
-        "permission": "User"
+        "username": u, "password": generate_password_hash(p), "displayname": d if d else u, "permission": "User"
     })
-    flash('สมัครสมาชิกสำเร็จ!', 'success')
+    flash('สมัครสำเร็จ!', 'success')
     return redirect(url_for('login_page'))
 
-# --- 7. Admin Dashboard & Access API ---
+# --- 7. Admin API (Grant/Revoke Access) ---
 @app.route('/admin_dashboard')
 @login_required
 @admin_required
 def admin_dashboard():
     users = list(mongo.db.users.find())
     all_students = list(mongo.db.students.find().sort("fullname", 1))
-    all_grades = mongo.db.students.distinct("grade")
-    return render_template('admin_dashboard.html', users=users, all_students=all_students, all_grades=all_grades)
+    return render_template('admin_dashboard.html', users=users, all_students=all_students)
 
 @app.route('/api/get_user_access/<username>')
 @login_required
@@ -221,17 +194,10 @@ def revoke_access(access_id):
     mongo.db.user_access.delete_one({"_id": ObjectId(access_id)})
     return jsonify({"success": True})
 
-# --- 8. Navigation & Settings ---
+# --- 8. Navigation ---
 @app.route('/chatbot')
 @login_required
 def chatbot_page(): return render_template('chatbot.html') 
-
-@app.route('/student_list_page')
-@login_required
-def student_list_page():
-    u, p = session['username'], session['permission']
-    stds = list(mongo.db.students.find()) if p == 'Admin' else []
-    return render_template('student_list.html', students=stds)
 
 @app.route('/logout')
 def logout(): session.clear(); return redirect(url_for('login_page'))
