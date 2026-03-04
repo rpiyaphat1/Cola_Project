@@ -16,16 +16,15 @@ except ImportError:
 app = Flask(__name__) 
 
 # --- 1. จัดการความลับ (Environment Variables) ---
-# บังคับให้มี Secret Key เสมอเพื่อให้ Session ทำงานได้เสถียร
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_secret_key_2026')
 AI_API_KEY = os.environ.get('AI_API_KEY')
 AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 
-# --- 2. Database Config (ปรับแต่งเพื่อความทนทานบน Vercel) ---
+# --- 2. Database Config ---
 raw_uri = os.environ.get('MONGODB_URI')
 
-# ตรวจสอบและบังคับให้เชื่อมต่อเข้า Database ชื่อ 'user' ตามที่พี่สร้างไว้ใน Atlas
 if raw_uri:
+    # บังคับให้วิ่งไปหา Database ชื่อ 'user' (ตามรูป image_45f263.jpg)
     if "user?" not in raw_uri:
         if "?" in raw_uri:
             final_uri = raw_uri.replace("?", "user?")
@@ -39,7 +38,6 @@ else:
 app.config["MONGO_URI"] = final_uri
 mongo = PyMongo(app)
 
-# ตัวแปรควบคุมสถานะบันทึกแชท
 SAVE_CHAT_ENABLED = False
 
 # --- 3. Middleware ---
@@ -75,7 +73,6 @@ def ask_ai():
             "timestamp": ObjectId()
         })
 
-    # ดึงข้อมูลนักเรียน (Query แบบ NoSQL)
     if permission == 'Admin':
         students_cursor = mongo.db.students.find()
     else:
@@ -114,14 +111,15 @@ def login_page(): return render_template('login.html')
 
 @app.route('/login', methods=['POST'])
 def login():
+    # .strip() สำคัญมาก กันพี่เผลอเคาะ space ตอนพิมพ์
     u = request.form.get('username', '').lower().strip()
-    p = request.form.get('password', '').strip() # ตัดช่องว่างหัวท้าย
+    p = request.form.get('password', '').strip()
     
     # ดึงจาก Collection 'users' (มี s) ตามที่พี่แจ้งล่าสุด
     user = mongo.db.users.find_one({"username": u})
     
     if user:
-        # ตรวจสอบ Password Hash
+        # เปรียบเทียบรหัสผ่านที่รับมา กับ Hash ใน Database
         if check_password_hash(user['password'], p):
             session.update({
                 'username': user['username'], 
@@ -139,7 +137,6 @@ def login():
 @login_required
 @admin_required
 def admin_dashboard():
-    # ดึงข้อมูล User ทั้งหมดจากตาราง 'users'
     users = list(mongo.db.users.find())
     all_students = list(mongo.db.students.find().sort("fullname", 1))
     all_grades = mongo.db.students.distinct("grade")
