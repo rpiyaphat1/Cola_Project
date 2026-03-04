@@ -2,8 +2,9 @@ import os
 import requests
 from functools import wraps
 from flask import Flask, render_template, request, jsonify, url_for, redirect, session, flash
-from flask_sqlalchemy import SQLAlchemy
+from flask_pymongo import PyMongo
 from werkzeug.security import generate_password_hash, check_password_hash
+from bson.objectid import ObjectId
 
 # โหลด .env เฉพาะเวลาเทสต์ในเครื่องตัวเอง (Local)
 try:
@@ -12,7 +13,6 @@ try:
 except ImportError:
     pass
 
-# --- จุดสำคัญ: ในเมื่อทุกอย่างอยู่ใน src แล้ว ใช้ค่า Default ได้เลย ---
 app = Flask(__name__) 
 
 # --- 1. จัดการความลับ (Environment Variables) ---
@@ -20,63 +20,15 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY')
 AI_API_KEY = os.environ.get('AI_API_KEY')
 AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 
+# --- 2. Database Config (ย้ายมา MongoDB Atlas) ---
+# พี่อย่าลืมเปลี่ยนค่า DATABASE_URL ใน Vercel ให้เป็น mongodb+srv://... นะครับ
+app.config["MONGO_URI"] = os.environ.get('MONGODB_URI')
+mongo = PyMongo(app)
+
 # ตัวแปรควบคุมสถานะบันทึกแชท
 SAVE_CHAT_ENABLED = False
 
-# --- 2. Database Config (ฉบับแก้ Network Error / SSL) ---
-db_url = os.environ.get('DATABASE_URL')
-
-if db_url:
-    # 1. ตัด parameter ทั้งหมดทิ้งเพื่อให้ได้ URL สะอาดๆ
-    if "?" in db_url:
-        db_url = db_url.split("?")[0]
-        
-    # 2. แก้ไข Protocol ให้เป็น postgresql+pg8000
-    if db_url.startswith("postgres://"):
-        db_url = db_url.replace("postgres://", "postgresql+pg8000://", 1)
-    elif db_url.startswith("postgresql://") and "+pg8000" not in db_url:
-        db_url = db_url.replace("postgresql://", "postgresql+pg8000://", 1)
-
-# 3. จุดสำคัญ: สั่งเปิด SSL ผ่าน Engine Options แทนการใส่ใน URL string
-app.config['SQLALCHEMY_DATABASE_URI'] = db_url
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    "connect_args": {"ssl_context": True}
-}
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
-
-# --- 3. Database Models ---
-class User(db.Model):
-    __tablename__ = 'users'
-    username = db.Column(db.String(80), primary_key=True)
-    password = db.Column(db.String(300), nullable=False)
-    displayname = db.Column(db.String(100), nullable=False)
-    permission = db.Column(db.String(20), default='Teacher')
-
-class Student(db.Model):
-    __tablename__ = 'students'
-    id = db.Column(db.Integer, primary_key=True)
-    fullname = db.Column(db.String(150), nullable=False, unique=True)
-    grade = db.Column(db.String(20), nullable=False)
-    disability_type = db.Column(db.String(50))
-    technique = db.Column(db.Text)
-
-class UserAccess(db.Model):
-    __tablename__ = 'user_access'
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), db.ForeignKey('users.username'), nullable=False)
-    accessible_grade = db.Column(db.String(20))
-    accessible_student_id = db.Column(db.Integer, db.ForeignKey('students.id'))
-
-class ChatHistory(db.Model):
-    __tablename__ = 'chat_history'
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), db.ForeignKey('users.username'), nullable=False)
-    role = db.Column(db.String(20)) 
-    message = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, default=db.func.now())
-
-# --- 4. Middleware ---
+# --- 3. Middleware ---
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -93,7 +45,7 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- 5. AI API & Chat Control ---
+# --- 4. AI API & Chat Control ---
 @app.route('/ask_ai', methods=['POST'])
 @login_required
 def ask_ai():
@@ -102,18 +54,28 @@ def ask_ai():
     username, permission = session['username'], session['permission']
 
     if SAVE_CHAT_ENABLED:
-        db.session.add(ChatHistory(username=username, role='user', message=user_input))
-        db.session.commit()
+        mongo.db.chat_history.insert_one({
+            "username": username,
+            "role": "user",
+            "message": user_input,
+            "timestamp": ObjectId().get_inc() 
+        })
 
+    # ดึงข้อมูลนักเรียน (Query แบบ NoSQL)
     if permission == 'Admin':
-        students = Student.query.all()
+        students_cursor = mongo.db.students.find()
     else:
-        access = UserAccess.query.filter_by(username=username).all()
-        gs = [a.accessible_grade for a in access if a.accessible_grade]
-        sids = [a.accessible_student_id for a in access if a.accessible_student_id]
-        students = Student.query.filter((Student.grade.in_(gs)) | (Student.id.in_(sids))).all()
+        access_list = list(mongo.db.user_access.find({"username": username}))
+        gs = [a.get('accessible_grade') for a in access_list if a.get('accessible_grade')]
+        sids = [a.get('accessible_student_id') for a in access_list if a.get('accessible_student_id')]
+        
+        query_parts = [{"grade": {"$in": gs}}]
+        if sids:
+            query_parts.append({"_id": {"$in": [ObjectId(sid) for sid in sids if sid]}})
+        students_cursor = mongo.db.students.find({"$or": query_parts})
 
-    ctx = "\n".join([f"- {s.fullname} ({s.grade}): {s.disability_type}" for s in students])
+    students = list(students_cursor)
+    ctx = "\n".join([f"- {s.get('fullname')} ({s.get('grade')}): {s.get('disability_type','')}" for s in students])
     role_th = "คุณครู" if permission == 'Teacher' else "ผู้ปกครอง"
     if permission == 'Admin': role_th = "ผู้ดูแล"
 
@@ -125,8 +87,7 @@ def ask_ai():
         reply = res.json()['choices'][0]['message']['content'] if res.status_code == 200 else "AI Error"
         
         if SAVE_CHAT_ENABLED and res.status_code == 200:
-            db.session.add(ChatHistory(username=username, role='ai', message=reply))
-            db.session.commit()
+            mongo.db.chat_history.insert_one({"username": username, "role": "ai", "message": reply})
             
         return jsonify({"reply": reply})
     except Exception as e:
@@ -145,17 +106,20 @@ def toggle_chat_save():
 def get_chat_status():
     return jsonify({"enabled": SAVE_CHAT_ENABLED})
 
-# --- 6. Auth & User Management ---
+# --- 5. Auth & User Management ---
 @app.route('/')
 def login_page(): return render_template('login.html')
 
 @app.route('/login', methods=['POST'])
 def login():
-    u, p = request.form.get('username', '').lower().strip(), request.form.get('password', '')
-    user = User.query.get(u)
-    if user and check_password_hash(user.password, p):
-        session.update({'username': user.username, 'displayname': user.displayname, 'permission': user.permission})
-        return redirect(url_for('admin_dashboard' if user.permission == 'Admin' else 'chatbot_page'))
+    u = request.form.get('username', '').lower().strip()
+    p = request.form.get('password', '')
+    
+    user = mongo.db.users.find_one({"username": u})
+    
+    if user and check_password_hash(user['password'], p):
+        session.update({'username': user['username'], 'displayname': user['displayname'], 'permission': user['permission']})
+        return redirect(url_for('admin_dashboard' if user['permission'] == 'Admin' else 'chatbot_page'))
     flash('ข้อมูลไม่ถูกต้อง', 'error')
     return redirect(url_for('login_page'))
 
@@ -163,43 +127,40 @@ def login():
 @login_required
 @admin_required
 def admin_dashboard():
-    users = User.query.all()
-    all_students = Student.query.order_by(Student.fullname.asc()).all()
-    all_grades = [g[0] for g in db.session.query(Student.grade).distinct().all() if g[0]]
+    users = list(mongo.db.users.find())
+    all_students = list(mongo.db.students.find().sort("fullname", 1))
+    all_grades = mongo.db.students.distinct("grade")
     return render_template('admin_dashboard.html', users=users, all_students=all_students, all_grades=all_grades)
 
-# --- 7. Access Control API ---
+# --- 6. Access Control API ---
 @app.route('/api/get_user_access/<username>')
 @login_required
 @admin_required
 def get_user_access(username):
-    accs = UserAccess.query.filter_by(username=username).all()
-    return jsonify({"access": [{"id": a.id, "grade": a.accessible_grade, "student_id": a.accessible_student_id} for a in accs]})
+    accs = list(mongo.db.user_access.find({"username": username}))
+    for a in accs: a['id'] = str(a['_id'])
+    return jsonify({"access": accs})
 
 @app.route('/api/grant_access', methods=['POST'])
 @login_required
 @admin_required
 def grant_access():
     data = request.json
-    new_access = UserAccess(
-        username=data.get('username'),
-        accessible_grade=data.get('grade') if data.get('grade') else None,
-        accessible_student_id=int(data.get('student_id')) if data.get('student_id') else None
-    )
-    db.session.add(new_access)
-    db.session.commit()
+    mongo.db.user_access.insert_one({
+        "username": data.get('username'),
+        "accessible_grade": data.get('grade') if data.get('grade') else None,
+        "accessible_student_id": data.get('student_id') if data.get('student_id') else None
+    })
     return jsonify({"success": True})
 
-@app.route('/api/revoke_access/<int:access_id>', methods=['POST'])
+@app.route('/api/revoke_access/<access_id>', methods=['POST'])
 @login_required
 @admin_required
 def revoke_access(access_id):
-    acc = UserAccess.query.get(access_id)
-    if acc:
-        db.session.delete(acc); db.session.commit()
+    mongo.db.user_access.delete_one({"_id": ObjectId(access_id)})
     return jsonify({"success": True})
 
-# --- 8. Navigation & Pages ---
+# --- 7. Navigation & Pages ---
 @app.route('/chatbot')
 @login_required
 def chatbot_page(): return render_template('chatbot.html') 
@@ -209,12 +170,17 @@ def chatbot_page(): return render_template('chatbot.html')
 def student_list_page():
     u, p = session['username'], session['permission']
     if p == 'Admin':
-        stds = Student.query.all()
+        stds = list(mongo.db.students.find())
     else:
-        acc = UserAccess.query.filter_by(username=u).all()
-        gs = [a.accessible_grade for a in acc if a.accessible_grade]
-        sids = [a.accessible_student_id for a in acc if a.accessible_student_id]
-        stds = Student.query.filter((Student.grade.in_(gs)) | (Student.id.in_(sids))).all()
+        access = list(mongo.db.user_access.find({"username": u}))
+        gs = [a.get('accessible_grade') for a in access if a.get('accessible_grade')]
+        sids = [a.get('accessible_student_id') for a in access if a.get('accessible_student_id')]
+        stds = list(mongo.db.students.find({
+            "$or": [
+                {"grade": {"$in": gs}},
+                {"_id": {"$in": [ObjectId(sid) for sid in sids if sid]}}
+            ]
+        }))
     return render_template('student_list.html', students=stds)
 
 @app.route('/logout')
@@ -223,13 +189,6 @@ def logout(): session.clear(); return redirect(url_for('login_page'))
 @app.route('/setting_page')
 @login_required
 def setting_page(): return render_template('setting.html')
-
-# --- 9. Database Initialize ---
-with app.app_context():
-    try:
-        db.create_all()
-    except Exception as e:
-        print(f"DB Error: {e}")
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=8000)
