@@ -25,6 +25,7 @@ raw_uri = os.environ.get('MONGODB_URI')
 
 if raw_uri:
     # แก้ปัญหา URI จาก Vercel ที่ไม่มีชื่อ Database คั่นกลาง
+    # เพื่อให้แอปวิ่งเข้าหา Database ชื่อ 'users' ที่พี่สร้างไว้
     if ".net/?" in raw_uri:
         final_uri = raw_uri.replace(".net/?", ".net/users?")
     elif raw_uri.endswith(".net/"):
@@ -73,7 +74,7 @@ def ask_ai():
             "timestamp": ObjectId()
         })
 
-    # ดึงข้อมูลนักเรียนจาก Database 'users'
+    # ดึงข้อมูลนักเรียนจาก Collection 'students' ใน Database 'users'
     if permission == 'Admin':
         students_cursor = mongo.db.students.find()
     else:
@@ -113,6 +114,11 @@ def toggle_chat_save():
     SAVE_CHAT_ENABLED = request.json.get('enabled', False)
     return jsonify({"success": True, "enabled": SAVE_CHAT_ENABLED})
 
+@app.route('/api/get_chat_status')
+@login_required
+def get_chat_status():
+    return jsonify({"enabled": SAVE_CHAT_ENABLED})
+
 # --- 5. Auth & User Management ---
 @app.route('/')
 def login_page(): return render_template('login.html')
@@ -122,12 +128,17 @@ def login():
     u = request.form.get('username', '').lower().strip()
     p = request.form.get('password', '').strip()
     
-    # ค้นหาในตาราง 'users' ตามรูป image_02c9eb.jpg
+    # ดึงจาก Collection 'users' ใน Database 'users'
     user = mongo.db.users.find_one({"username": u})
     
     if user:
-        # เทียบ Hash รหัสผ่าน
+        # --- Debug Log: ตรวจสอบข้อมูลที่ดึงมาจาก DB ---
+        print(f"DEBUG LOGIN: Found User '{u}'")
+        print(f"DEBUG HASH IN DB: '{user.get('password')}'")
+        
+        # ตรวจสอบรหัสผ่านด้วย Hash
         if check_password_hash(user['password'], p):
+            print("DEBUG: Password Match! Redirecting...")
             session.update({
                 'username': user['username'], 
                 'displayname': user['displayname'], 
@@ -136,6 +147,10 @@ def login():
             if user['permission'] == 'Admin':
                 return redirect(url_for('admin_dashboard'))
             return redirect(url_for('chatbot_page'))
+        else:
+            print("DEBUG: Password Mismatch!")
+    else:
+        print(f"DEBUG: User '{u}' not found in database!")
     
     flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'error')
     return redirect(url_for('login_page'))
@@ -144,6 +159,7 @@ def login():
 @login_required
 @admin_required
 def admin_dashboard():
+    # ดึงข้อมูลจากตาราง 'users' มาโชว์ในหน้า Admin
     users = list(mongo.db.users.find())
     all_students = list(mongo.db.students.find().sort("fullname", 1))
     all_grades = mongo.db.students.distinct("grade")
