@@ -20,16 +20,15 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_secret_key_2026')
 AI_API_KEY = os.environ.get('AI_API_KEY')
 AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 
-# --- 2. Database Config ---
+# --- 2. Database Config (ดักตบ URI ให้วิ่งเข้า Database 'users') ---
 raw_uri = os.environ.get('MONGODB_URI')
 
 if raw_uri:
-    # บังคับให้วิ่งไปหา Database ชื่อ 'user' (ตามรูป image_45f263.jpg)
-    if "user?" not in raw_uri:
-        if "?" in raw_uri:
-            final_uri = raw_uri.replace("?", "user?")
-        else:
-            final_uri = raw_uri.rstrip('/') + "/user"
+    # ดึงชื่อ Database 'users' มาคั่นกลางก่อนเครื่องหมาย ? ตามที่พี่บอก
+    if ".net/?" in raw_uri:
+        final_uri = raw_uri.replace(".net/?", ".net/users?")
+    elif raw_uri.endswith(".net/"):
+        final_uri = raw_uri + "users"
     else:
         final_uri = raw_uri
 else:
@@ -38,6 +37,7 @@ else:
 app.config["MONGO_URI"] = final_uri
 mongo = PyMongo(app)
 
+# ตัวแปรควบคุมสถานะบันทึกแชท
 SAVE_CHAT_ENABLED = False
 
 # --- 3. Middleware ---
@@ -105,21 +105,32 @@ def ask_ai():
     except Exception as e:
         return jsonify({"reply": f"Error: {str(e)}"}), 500
 
+@app.route('/api/toggle_chat_save', methods=['POST'])
+@login_required
+def toggle_chat_save():
+    global SAVE_CHAT_ENABLED
+    if session.get('permission') != 'Admin': return jsonify({"success": False}), 403
+    SAVE_CHAT_ENABLED = request.json.get('enabled', False)
+    return jsonify({"success": True, "enabled": SAVE_CHAT_ENABLED})
+
+@app.route('/api/get_chat_status')
+@login_required
+def get_chat_status():
+    return jsonify({"enabled": SAVE_CHAT_ENABLED})
+
 # --- 5. Auth & User Management ---
 @app.route('/')
 def login_page(): return render_template('login.html')
 
 @app.route('/login', methods=['POST'])
 def login():
-    # .strip() สำคัญมาก กันพี่เผลอเคาะ space ตอนพิมพ์
     u = request.form.get('username', '').lower().strip()
     p = request.form.get('password', '').strip()
     
-    # ดึงจาก Collection 'users' (มี s) ตามที่พี่แจ้งล่าสุด
+    # ดึงจาก Collection 'users' ใน Database 'users'
     user = mongo.db.users.find_one({"username": u})
     
     if user:
-        # เปรียบเทียบรหัสผ่านที่รับมา กับ Hash ใน Database
         if check_password_hash(user['password'], p):
             session.update({
                 'username': user['username'], 
