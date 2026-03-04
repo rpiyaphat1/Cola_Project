@@ -16,20 +16,21 @@ except ImportError:
 app = Flask(__name__) 
 
 # --- 1. จัดการความลับ (Environment Variables) ---
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
+# บังคับให้มี Secret Key เสมอเพื่อให้ Session ทำงานได้เสถียร
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_secret_key_2026')
 AI_API_KEY = os.environ.get('AI_API_KEY')
 AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 
-# --- 2. Database Config (ปรับปรุงเพื่อความทนทาน) ---
+# --- 2. Database Config (ปรับแต่งเพื่อความทนทานบน Vercel) ---
 raw_uri = os.environ.get('MONGODB_URI')
 
-# ตรวจสอบและบังคับให้เชื่อมต่อเข้า Database ชื่อ 'user' ตามที่พี่สร้างไว้
+# ตรวจสอบและบังคับให้เชื่อมต่อเข้า Database ชื่อ 'user' ตามที่พี่สร้างไว้ใน Atlas
 if raw_uri:
     if "user?" not in raw_uri:
         if "?" in raw_uri:
             final_uri = raw_uri.replace("?", "user?")
         else:
-            final_uri = raw_uri + "/user" if not raw_uri.endswith("/") else raw_uri + "user"
+            final_uri = raw_uri.rstrip('/') + "/user"
     else:
         final_uri = raw_uri
 else:
@@ -107,19 +108,6 @@ def ask_ai():
     except Exception as e:
         return jsonify({"reply": f"Error: {str(e)}"}), 500
 
-@app.route('/api/toggle_chat_save', methods=['POST'])
-@login_required
-def toggle_chat_save():
-    global SAVE_CHAT_ENABLED
-    if session.get('permission') != 'Admin': return jsonify({"success": False}), 403
-    SAVE_CHAT_ENABLED = request.json.get('enabled', False)
-    return jsonify({"success": True, "enabled": SAVE_CHAT_ENABLED})
-
-@app.route('/api/get_chat_status')
-@login_required
-def get_chat_status():
-    return jsonify({"enabled": SAVE_CHAT_ENABLED})
-
 # --- 5. Auth & User Management ---
 @app.route('/')
 def login_page(): return render_template('login.html')
@@ -127,23 +115,32 @@ def login_page(): return render_template('login.html')
 @app.route('/login', methods=['POST'])
 def login():
     u = request.form.get('username', '').lower().strip()
-    p = request.form.get('password', '')
+    p = request.form.get('password', '').strip() # ตัดช่องว่างหัวท้าย
     
-    # ดึงจาก Collection 'user' ตามที่พี่สร้างไว้ใน Atlas
-    user = mongo.db.user.find_one({"username": u})
+    # ดึงจาก Collection 'users' (มี s) ตามที่พี่แจ้งล่าสุด
+    user = mongo.db.users.find_one({"username": u})
     
-    if user and check_password_hash(user['password'], p):
-        session.update({'username': user['username'], 'displayname': user['displayname'], 'permission': user['permission']})
-        return redirect(url_for('admin_dashboard' if user['permission'] == 'Admin' else 'chatbot_page'))
-    flash('ข้อมูลไม่ถูกต้อง', 'error')
+    if user:
+        # ตรวจสอบ Password Hash
+        if check_password_hash(user['password'], p):
+            session.update({
+                'username': user['username'], 
+                'displayname': user['displayname'], 
+                'permission': user['permission']
+            })
+            if user['permission'] == 'Admin':
+                return redirect(url_for('admin_dashboard'))
+            return redirect(url_for('chatbot_page'))
+    
+    flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'error')
     return redirect(url_for('login_page'))
 
 @app.route('/admin_dashboard')
 @login_required
 @admin_required
 def admin_dashboard():
-    # เปลี่ยนเป็น 'user' ให้ตรงกับ Database
-    users = list(mongo.db.user.find())
+    # ดึงข้อมูล User ทั้งหมดจากตาราง 'users'
+    users = list(mongo.db.users.find())
     all_students = list(mongo.db.students.find().sort("fullname", 1))
     all_grades = mongo.db.students.distinct("grade")
     return render_template('admin_dashboard.html', users=users, all_students=all_students, all_grades=all_grades)
