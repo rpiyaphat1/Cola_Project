@@ -35,7 +35,7 @@ else:
 # ตะโกนบอกใน Log เพื่อเช็คว่าแก้ติดมั้ย
 print(f"!!! FINAL CHECK URI (NO HASH MODE) -> {final_uri}") 
 
-app.config["MONGO_URI"] = final_uri
+app.config["MONGO_URI"] = "mongodb+srv://Vercel-Admin-IEPAssistant:ivo7WFcj1ttee26d@iepassistant.kpeqe2r.mongodb.net/IEP?retryWrites=true&w=majority"
 mongo = PyMongo(app)
 
 # ตัวแปรควบคุมสถานะบันทึกแชท
