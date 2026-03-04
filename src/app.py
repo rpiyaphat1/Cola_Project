@@ -1,7 +1,7 @@
 import os
 import requests
 from functools import wraps
-from flask import Flask, render_template, request, jsonify, url_for, redirect, session, flash
+from flask import Flask, render_template, request, jsonify, url_for, redirect, session, flash, send_from_directory
 from flask_pymongo import PyMongo
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
@@ -24,8 +24,7 @@ AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 raw_uri = os.environ.get('MONGODB_URI')
 
 if raw_uri:
-    # แก้ปัญหา URI จาก Vercel ที่ไม่มีชื่อ Database คั่นกลาง
-    # เพื่อให้แอปวิ่งเข้าหา Database ชื่อ 'users' ที่พี่สร้างไว้
+    # แก้ปัญหา URI จาก Vercel ที่ไม่มีชื่อ Database เพื่อให้วิ่งเข้าหา Database 'users'
     if ".net/?" in raw_uri:
         final_uri = raw_uri.replace(".net/?", ".net/users?")
     elif raw_uri.endswith(".net/"):
@@ -58,7 +57,14 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- 4. AI API & Chat Control ---
+# --- 4. Route สำหรับ Favicon ---
+# เพิ่มส่วนนี้เพื่อให้ Browser ดึงรูป favicon.ico จากโฟลเดอร์ static ได้โดยตรง
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
+# --- 5. AI API & Chat Control ---
 @app.route('/ask_ai', methods=['POST'])
 @login_required
 def ask_ai():
@@ -74,7 +80,6 @@ def ask_ai():
             "timestamp": ObjectId()
         })
 
-    # ดึงข้อมูลนักเรียนจาก Collection 'students' ใน Database 'users'
     if permission == 'Admin':
         students_cursor = mongo.db.students.find()
     else:
@@ -119,7 +124,7 @@ def toggle_chat_save():
 def get_chat_status():
     return jsonify({"enabled": SAVE_CHAT_ENABLED})
 
-# --- 5. Auth & User Management ---
+# --- 6. Auth & User Management ---
 @app.route('/')
 def login_page(): return render_template('login.html')
 
@@ -128,15 +133,12 @@ def login():
     u = request.form.get('username', '').lower().strip()
     p = request.form.get('password', '').strip()
     
-    # ดึงจาก Collection 'users' ใน Database 'users'
     user = mongo.db.users.find_one({"username": u})
     
     if user:
-        # --- Debug Log: ตรวจสอบข้อมูลที่ดึงมาจาก DB ---
         print(f"DEBUG LOGIN: Found User '{u}'")
         print(f"DEBUG HASH IN DB: '{user.get('password')}'")
         
-        # ตรวจสอบรหัสผ่านด้วย Hash
         if check_password_hash(user['password'], p):
             print("DEBUG: Password Match! Redirecting...")
             session.update({
@@ -159,13 +161,12 @@ def login():
 @login_required
 @admin_required
 def admin_dashboard():
-    # ดึงข้อมูลจากตาราง 'users' มาโชว์ในหน้า Admin
     users = list(mongo.db.users.find())
     all_students = list(mongo.db.students.find().sort("fullname", 1))
     all_grades = mongo.db.students.distinct("grade")
     return render_template('admin_dashboard.html', users=users, all_students=all_students, all_grades=all_grades)
 
-# --- 6. Access Control API ---
+# --- 7. Access Control API ---
 @app.route('/api/get_user_access/<username>')
 @login_required
 @admin_required
@@ -193,7 +194,7 @@ def revoke_access(access_id):
     mongo.db.user_access.delete_one({"_id": ObjectId(access_id)})
     return jsonify({"success": True})
 
-# --- 7. Navigation & Pages ---
+# --- 8. Navigation & Pages ---
 @app.route('/chatbot')
 @login_required
 def chatbot_page(): return render_template('chatbot.html') 
