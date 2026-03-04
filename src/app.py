@@ -16,13 +16,26 @@ except ImportError:
 app = Flask(__name__) 
 
 # --- 1. จัดการความลับ (Environment Variables) ---
-app.secret_key = os.environ.get('FLASK_SECRET_KEY')
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
 AI_API_KEY = os.environ.get('AI_API_KEY')
 AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 
-# --- 2. Database Config (ย้ายมา MongoDB Atlas) ---
-# พี่อย่าลืมเปลี่ยนค่า DATABASE_URL ใน Vercel ให้เป็น mongodb+srv://... นะครับ
-app.config["MONGO_URI"] = os.environ.get('MONGODB_URI')
+# --- 2. Database Config (ปรับปรุงเพื่อความทนทาน) ---
+raw_uri = os.environ.get('MONGODB_URI')
+
+# ตรวจสอบและบังคับให้เชื่อมต่อเข้า Database ชื่อ 'user' ตามที่พี่สร้างไว้
+if raw_uri:
+    if "user?" not in raw_uri:
+        if "?" in raw_uri:
+            final_uri = raw_uri.replace("?", "user?")
+        else:
+            final_uri = raw_uri + "/user" if not raw_uri.endswith("/") else raw_uri + "user"
+    else:
+        final_uri = raw_uri
+else:
+    final_uri = None
+
+app.config["MONGO_URI"] = final_uri
 mongo = PyMongo(app)
 
 # ตัวแปรควบคุมสถานะบันทึกแชท
@@ -58,7 +71,7 @@ def ask_ai():
             "username": username,
             "role": "user",
             "message": user_input,
-            "timestamp": ObjectId().get_inc() 
+            "timestamp": ObjectId()
         })
 
     # ดึงข้อมูลนักเรียน (Query แบบ NoSQL)
@@ -69,10 +82,11 @@ def ask_ai():
         gs = [a.get('accessible_grade') for a in access_list if a.get('accessible_grade')]
         sids = [a.get('accessible_student_id') for a in access_list if a.get('accessible_student_id')]
         
-        query_parts = [{"grade": {"$in": gs}}]
-        if sids:
-            query_parts.append({"_id": {"$in": [ObjectId(sid) for sid in sids if sid]}})
-        students_cursor = mongo.db.students.find({"$or": query_parts})
+        query_parts = []
+        if gs: query_parts.append({"grade": {"$in": gs}})
+        if sids: query_parts.append({"_id": {"$in": [ObjectId(sid) for sid in sids if sid]}})
+        
+        students_cursor = mongo.db.students.find({"$or": query_parts}) if query_parts else mongo.db.students.find({"_id": None})
 
     students = list(students_cursor)
     ctx = "\n".join([f"- {s.get('fullname')} ({s.get('grade')}): {s.get('disability_type','')}" for s in students])
@@ -115,7 +129,8 @@ def login():
     u = request.form.get('username', '').lower().strip()
     p = request.form.get('password', '')
     
-    user = mongo.db.users.find_one({"username": u})
+    # ดึงจาก Collection 'user' ตามที่พี่สร้างไว้ใน Atlas
+    user = mongo.db.user.find_one({"username": u})
     
     if user and check_password_hash(user['password'], p):
         session.update({'username': user['username'], 'displayname': user['displayname'], 'permission': user['permission']})
@@ -127,7 +142,8 @@ def login():
 @login_required
 @admin_required
 def admin_dashboard():
-    users = list(mongo.db.users.find())
+    # เปลี่ยนเป็น 'user' ให้ตรงกับ Database
+    users = list(mongo.db.user.find())
     all_students = list(mongo.db.students.find().sort("fullname", 1))
     all_grades = mongo.db.students.distinct("grade")
     return render_template('admin_dashboard.html', users=users, all_students=all_students, all_grades=all_grades)
@@ -175,12 +191,12 @@ def student_list_page():
         access = list(mongo.db.user_access.find({"username": u}))
         gs = [a.get('accessible_grade') for a in access if a.get('accessible_grade')]
         sids = [a.get('accessible_student_id') for a in access if a.get('accessible_student_id')]
-        stds = list(mongo.db.students.find({
-            "$or": [
-                {"grade": {"$in": gs}},
-                {"_id": {"$in": [ObjectId(sid) for sid in sids if sid]}}
-            ]
-        }))
+        
+        query_parts = []
+        if gs: query_parts.append({"grade": {"$in": gs}})
+        if sids: query_parts.append({"_id": {"$in": [ObjectId(sid) for sid in sids if sid]}})
+        
+        stds = list(mongo.db.students.find({"$or": query_parts})) if query_parts else []
     return render_template('student_list.html', students=stds)
 
 @app.route('/logout')
