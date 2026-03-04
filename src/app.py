@@ -20,19 +20,29 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_secret_key_2026')
 AI_API_KEY = os.environ.get('AI_API_KEY')
 AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 
-# --- 2. Database Config (ฉบับดัดหลัง Vercel ให้ไปหา 'users' เสมอ) ---
+# --- 2. Database Config (ฉบับดัดหลัง Vercel บังคับเข้า Database 'IEP') ---
 raw_uri = os.environ.get('MONGODB_URI')
 
 if raw_uri:
-    # แก้ปัญหา URI จาก Vercel ที่ไม่มีชื่อ Database เพื่อให้วิ่งเข้าหา Database 'users'
+    # ดักแก้ URI ให้ชี้ไปที่ Database 'IEP' เสมอ
     if ".net/?" in raw_uri:
-        final_uri = raw_uri.replace(".net/?", ".net/users?")
+        final_uri = raw_uri.replace(".net/?", ".net/IEP?")
     elif raw_uri.endswith(".net/"):
-        final_uri = raw_uri + "users"
+        final_uri = raw_uri + "IEP"
+    elif ".net" in raw_uri and "/IEP" not in raw_uri:
+        parts = raw_uri.split(".net")
+        if "?" in parts[1]:
+            option_part = parts[1][parts[1].find("?"):]
+            final_uri = parts[0] + ".net/IEP" + option_part
+        else:
+            final_uri = parts[0] + ".net/IEP"
     else:
         final_uri = raw_uri
 else:
     final_uri = None
+
+# พ่นค่าออกมาดูใน Vercel Log เพื่อเช็คความถูกต้อง
+print(f"DEBUG: Connecting to Database -> {final_uri}") 
 
 app.config["MONGO_URI"] = final_uri
 mongo = PyMongo(app)
@@ -57,10 +67,10 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- 4. Route สำหรับ Favicon (ดึงจากตำแหน่งจริงตามรูปโครงสร้างไฟล์) ---
+# --- 4. Route สำหรับ Favicon (ดึงจาก Root นอก src ตามโครงสร้างไฟล์พี่) ---
 @app.route('/favicon.ico')
 def favicon():
-    # ดึงไฟล์จาก Root Path นอกโฟลเดอร์ src ตามรูป image_0246be.png
+    # ดึงไฟล์ favicon.ico จากตำแหน่งนอกโฟลเดอร์ src ตามรูป image_0246be.png
     return send_from_directory(os.path.abspath(os.path.join(app.root_path, '..')),
                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
@@ -77,7 +87,7 @@ def ask_ai():
             "username": username, "role": "user", "message": user_input, "timestamp": ObjectId()
         })
 
-    # ดึงข้อมูลนักเรียนตามสิทธิ์การเข้าถึง
+    # ค้นหาข้อมูลนักเรียนใน Database 'IEP'
     if permission == 'Admin':
         students_cursor = mongo.db.students.find()
     else:
@@ -121,20 +131,20 @@ def toggle_chat_save():
 def get_chat_status():
     return jsonify({"enabled": SAVE_CHAT_ENABLED})
 
-# --- 6. Auth (Login/Register) ---
+# --- 6. Auth & User Management (Login/Register) ---
 @app.route('/')
 def login_page(): return render_template('login.html')
 
 @app.route('/login', methods=['POST'])
 def login():
-    # รองรับ Case-Insensitive และตัดช่องว่าง
+    # รองรับตัวเล็ก/ตัวใหญ่ และตัดช่องว่าง
     u = request.form.get('username', '').strip().lower()
     p = request.form.get('password', '').strip()
     
     user = mongo.db.users.find_one({"username": u})
     
     if user:
-        # Debug Log เพื่อเช็คความสมบูรณ์ของ Hash ใน DB
+        # Debug Log เช็คค่า Hash ใน DB
         print(f"DEBUG: Found User '{u}' with Hash: '{user.get('password')}'")
         if check_password_hash(user['password'], p):
             session.update({
@@ -143,10 +153,6 @@ def login():
                 'permission': user['permission']
             })
             return redirect(url_for('admin_dashboard' if user['permission'] == 'Admin' else 'chatbot_page'))
-        else:
-            print("DEBUG: Password mismatch!")
-    else:
-        print(f"DEBUG: User '{u}' not found!")
     
     flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'error')
     return redirect(url_for('login_page'))
@@ -164,7 +170,7 @@ def register():
         flash('กรุณากรอกข้อมูลให้ครบถ้วน', 'error')
         return redirect(url_for('register_page'))
 
-    # ตรวจสอบ Username ซ้ำ
+    # เช็คชื่อซ้ำก่อนสมัคร
     if mongo.db.users.find_one({"username": u}):
         flash('ชื่อผู้ใช้นี้มีคนใช้แล้ว!', 'error')
         return redirect(url_for('register_page'))
@@ -178,7 +184,7 @@ def register():
     flash('สมัครสมาชิกสำเร็จ!', 'success')
     return redirect(url_for('login_page'))
 
-# --- 7. Admin Dashboard & Access Control API ---
+# --- 7. Admin Dashboard & Access API ---
 @app.route('/admin_dashboard')
 @login_required
 @admin_required
