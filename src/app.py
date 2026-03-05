@@ -5,7 +5,7 @@ from flask import Flask, render_template, request, jsonify, url_for, redirect, s
 from flask_pymongo import PyMongo
 from bson.objectid import ObjectId
 
-# โหลด .env สำหรับรันในเครื่องตัวเอง (Local)
+# โหลด .env สำหรับรันในเครื่องตัวเอง
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -19,8 +19,8 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_smart_assistant_20
 AI_API_KEY = os.environ.get('AI_API_KEY')
 AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 
-# --- 2. Database Config (ชี้ไปที่บ้านใหม่ 'IEP' ตามที่ตกลงกัน) ---
-# สำคัญ: ใน Vercel พี่ต้องแก้ MY_DB_URL ให้ลงท้ายด้วย /IEP? เท่านั้น
+# --- 2. Database Config (ชี้ไปที่บ้าน 'IEP' ตามมาตรฐานใหม่) ---
+# ใน Vercel พี่ต้องตั้ง MY_DB_URL ให้ลงท้ายด้วย /IEP? นะครับ
 app.config["MONGO_URI"] = os.environ.get('MY_DB_URL')
 mongo = PyMongo(app)
 
@@ -38,7 +38,7 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # รองรับทั้ง Admin และ Super Admin
+        # รองรับทั้ง Admin และ Super Admin ตามที่พี่ต้องการ
         allowed = ['Admin', 'Super Admin']
         if session.get('permission') not in allowed:
             flash('เฉพาะผู้ดูแลระบบเท่านั้น!', 'error')
@@ -46,10 +46,11 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- 4. Route สำหรับ Favicon ---
+# --- 4. Route สำหรับ Favicon (แก้ให้ดึงจาก static) ---
 @app.route('/favicon.ico')
 def favicon():
-    return send_from_directory(os.path.abspath(os.path.join(app.root_path, '..')),
+    # ดึงไฟล์ favicon.ico จากโฟลเดอร์ static โดยตรง
+    return send_from_directory(os.path.join(app.root_path, 'static'),
                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 # --- 5. AI API & Chat Control ---
@@ -61,28 +62,31 @@ def ask_ai():
     username = session['username']
     permission = session['permission']
 
+    # บันทึกประวัติฝั่ง User ถ้าเปิด Toggle ไว้
     if SAVE_CHAT_ENABLED:
         mongo.db.chat_history.insert_one({
             "username": username, "role": "user", "message": user_input, "timestamp": ObjectId()
         })
 
-    # ดึงข้อมูลนักเรียนจาก Database 'IEP'
-    if permission in ['Admin', 'Super Admin']:
-        students_cursor = mongo.db.students.find()
-    else:
-        access_list = list(mongo.db.user_access.find({"username": username}))
-        gs = [a.get('accessible_grade') for a in access_list if a.get('accessible_grade')]
-        sids = [a.get('accessible_student_id') for a in access_list if a.get('accessible_student_id')]
-        
-        query_parts = []
-        if gs: query_parts.append({"grade": {"$in": gs}})
-        if sids: query_parts.append({"_id": {"$in": [ObjectId(sid) for sid in sids if sid]}})
-        
-        students_cursor = mongo.db.students.find({"$or": query_parts}) if query_parts else mongo.db.students.find({"_id": None})
+    # ดึงข้อมูลนักเรียนตามสิทธิ์ (Admin ดูได้หมด / User ดูตามที่ได้รับอนุญาต)
+    try:
+        if permission in ['Admin', 'Super Admin']:
+            students_cursor = mongo.db.students.find()
+        else:
+            access_list = list(mongo.db.user_access.find({"username": username}))
+            gs = [a.get('accessible_grade') for a in access_list if a.get('accessible_grade')]
+            sids = [a.get('accessible_student_id') for a in access_list if a.get('accessible_student_id')]
+            
+            query_parts = []
+            if gs: query_parts.append({"grade": {"$in": gs}})
+            if sids: query_parts.append({"_id": {"$in": [ObjectId(sid) for sid in sids if sid]}})
+            
+            students_cursor = mongo.db.students.find({"$or": query_parts}) if query_parts else mongo.db.students.find({"_id": None})
+        students = list(students_cursor)
+    except:
+        students = []
 
-    students = list(students_cursor)
     ctx = "\n".join([f"- {s.get('fullname')} ({s.get('grade')}): {s.get('disability_type','')}" for s in students])
-
     prompt = f"คุณคือผู้ช่วย ข้อมูลนักเรียน: {ctx}\nคำถาม: {user_input}"
     
     try:
@@ -106,55 +110,83 @@ def toggle_chat_save():
     SAVE_CHAT_ENABLED = request.json.get('enabled', False)
     return jsonify({"success": True, "enabled": SAVE_CHAT_ENABLED})
 
-@app.route('/api/get_chat_status')
-@login_required
-def get_chat_status():
-    return jsonify({"enabled": SAVE_CHAT_ENABLED})
-
-# --- 6. Auth (Login แบบ No Hash และ Case-Insensitive ตามมาตรฐานใหม่) ---
+# --- 6. Auth (Login แบบ No Hash) ---
 @app.route('/')
 def login_page(): return render_template('login.html')
 
 @app.route('/login', methods=['POST'])
 def login():
-    # ใช้ .lower() เพื่อให้ตรงกับ 'admin' ที่พี่พิมพ์ลง Database ใหม่
-    u = request.form.get('username', '').strip().lower()
+    u = request.form.get('username', '').strip().lower() # ปรับเป็นตัวเล็กตามมาตรฐาน
     p = request.form.get('password', '').strip()
     
     try:
-        # ค้นหาในตาราง users ของ Database IEP
         user = mongo.db.users.find_one({"username": u})
-        
-        if user:
-            # เทียบ Plain Text 123456 ตรงๆ
-            if str(user.get('password')).strip() == p:
-                session.update({
-                    'username': u, 
-                    'displayname': user.get('displayname', u), 
-                    'permission': user.get('permission', 'User')
-                })
-                if user.get('permission') in ['Admin', 'Super Admin']:
-                    return redirect(url_for('admin_dashboard'))
-                return redirect(url_for('chatbot_page'))
+        if user and str(user.get('password')).strip() == p:
+            session.update({
+                'username': u, 
+                'displayname': user.get('displayname', u), 
+                'permission': user.get('permission', 'User')
+            })
+            if user.get('permission') in ['Admin', 'Super Admin']:
+                return redirect(url_for('admin_dashboard'))
+            return redirect(url_for('chatbot_page'))
     except Exception as e:
         print(f"!!! DATABASE ERROR: {str(e)}")
 
     flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'error')
     return redirect(url_for('login_page'))
 
-# --- 7. Admin API & Dashboard ---
+# --- 7. Admin Dashboard (แก้ไขเพื่อป้องกัน Error 500) ---
 @app.route('/admin_dashboard')
 @login_required
 @admin_required
 def admin_dashboard():
-    users = list(mongo.db.users.find())
-    all_students = list(mongo.db.students.find().sort("fullname", 1))
-    return render_template('admin_dashboard.html', users=users, all_students=all_students)
+    try:
+        # ตรวจสอบว่ามีตารางหรือไม่ก่อนดึงข้อมูล
+        collections = mongo.db.list_collection_names()
+        users = list(mongo.db.users.find())
+        all_students = list(mongo.db.students.find().sort("fullname", 1)) if 'students' in collections else []
+        return render_template('admin_dashboard.html', users=users, all_students=all_students)
+    except Exception as e:
+        # หากเกิดความผิดพลาด ให้ส่ง List ว่างไปแทนเพื่อให้หน้าเว็บยังแสดงผลได้
+        return render_template('admin_dashboard.html', users=[], all_students=[], error=str(e))
 
-# --- 8. Navigation & Logout ---
+# --- 8. API สำหรับจัดการสิทธิ์นักเรียน (ครบทุกฟังก์ชัน) ---
+@app.route('/api/get_user_access/<username>')
+@login_required
+@admin_required
+def get_user_access(username):
+    accs = list(mongo.db.user_access.find({"username": username}))
+    for a in accs: a['id'] = str(a['_id'])
+    return jsonify({"access": accs})
+
+@app.route('/api/grant_access', methods=['POST'])
+@login_required
+@admin_required
+def grant_access():
+    data = request.json
+    mongo.db.user_access.insert_one({
+        "username": data.get('username'), 
+        "accessible_grade": data.get('grade'), 
+        "accessible_student_id": data.get('student_id')
+    })
+    return jsonify({"success": True})
+
+@app.route('/api/revoke_access/<access_id>', methods=['POST'])
+@login_required
+@admin_required
+def revoke_access(access_id):
+    mongo.db.user_access.delete_one({"_id": ObjectId(access_id)})
+    return jsonify({"success": True})
+
+# --- 9. Navigation ---
 @app.route('/chatbot')
 @login_required
 def chatbot_page(): return render_template('chatbot.html') 
+
+@app.route('/setting_page')
+@login_required
+def setting_page(): return render_template('setting.html')
 
 @app.route('/logout')
 def logout(): session.clear(); return redirect(url_for('login_page'))
