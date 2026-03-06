@@ -163,26 +163,29 @@ def setup_admin():
     return "ระบบมีบัญชี Admin อยู่แล้วใน Database นี้ครับ"
 
 # -----------------------------------------------------------------------------
-# 5. ADMIN DASHBOARD & USER MANAGEMENT (จัดการข้อมูลหลังบ้าน)
+# 5. ADMIN DASHBOARD & USER MANAGEMENT (จุดที่แก้ไขคืนค่า Card User)
 # -----------------------------------------------------------------------------
 
 @app.route('/admin_dashboard')
 @login_required
 @admin_required
 def admin_dashboard():
-    """ หน้าแดชบอร์ดสำหรับดูและแก้ไขข้อมูลผู้ใช้งานทั้งหมด """
+    """ หน้าแดชบอร์ดสำหรับจัดการผู้ใช้: คืนค่าการดึง Users ทั้งหมดเพื่อโชว์ใน Frontend """
     try:
-        # ✅ ดึงรายชื่อ User ทั้งหมดมาจัดการสิทธิ์ในหน้าเดียว
+        # ✅ 1. ดึงรายชื่อผู้ใช้ทั้งหมดจากตาราง users มาแสดงผล (คืนค่า Card User)
         users = list(mongo.db.users.find())
+        
+        # ✅ 2. ดึงรายชื่อนักเรียนทั้งหมดและเรียงตามชื่อ (เพื่อใช้ในระบบ Search รายคน)
         all_students = list(mongo.db.students.find().sort("fullname", 1))
         
-        # สร้างรายการระดับชั้นเรียนที่ไม่ซ้ำกันเพื่อใช้ใน Filter
+        # ✅ 3. กรองรายชื่อระดับชั้นที่ไม่ซ้ำกัน (เพื่อใช้ในระบบ Search รายห้อง)
         all_grades = sorted(list(set([s.get('grade') for s in all_students if s.get('grade')])))
         
-        # แปลง ObjectId เป็น String เพื่อส่งไปใช้งานใน JavaScript
+        # ✅ 4. เตรียมข้อมูล ObjectId ให้เป็น String เพื่อให้ JavaScript ฝั่ง Frontend อ่านได้
         for s in all_students:
             s['id'] = str(s['_id'])
             
+        # ✅ 5. ส่งข้อมูลทั้งหมดไปยัง Template admin_dashboard.html
         return render_template(
             'admin_dashboard.html', 
             users=users, 
@@ -190,7 +193,9 @@ def admin_dashboard():
             all_grades=all_grades
         )
     except Exception as e:
-        return render_template('admin_dashboard.html', error=str(e))
+        print(f"❌ Dashboard Error: {str(e)}")
+        # หากเกิด Error ให้ส่งตัวแปรว่างไปป้องกันหน้าขาวพัง
+        return render_template('admin_dashboard.html', users=[], all_students=[], all_grades=[], error=str(e))
 
 @app.route('/update_user/<username>', methods=['POST'])
 @login_required
