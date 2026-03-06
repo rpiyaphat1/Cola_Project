@@ -14,7 +14,7 @@ except ImportError:
     pass
 
 app = Flask(__name__) 
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_2026_final_no_hash')
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_2026_final_stable_version')
 
 # --- 1. Database Config ---
 app.config["MONGO_URI"] = os.environ.get('MY_DB_URL')
@@ -35,7 +35,7 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # ✅ รองรับทั้ง Admin และ Super Admin ตามที่พี่มีใน DB
+        # ✅ รองรับทั้ง Admin และ Super Admin
         allowed_roles = ['Admin', 'Super Admin']
         if session.get('permission') not in allowed_roles:
             flash('เฉพาะผู้ดูแลระบบเท่านั้น!', 'error')
@@ -58,7 +58,7 @@ def login():
     u = request.form.get('username', '').strip()
     p = request.form.get('password', '').strip()
     try:
-        # ✅ ใช้ Regex เพื่อให้เจอ "Admin" ใน DB แม้พิมพ์ "admin"
+        # ✅ ใช้ Regex เพื่อให้เจอ "Admin" ใน DB แม้พี่จะพิมพ์ตัวเล็กหรือตัวใหญ่ก็ตาม
         user = mongo.db.users.find_one({"username": re.compile(f'^{u}$', re.IGNORECASE)})
         
         if user:
@@ -66,7 +66,7 @@ def login():
             # ✅ เทียบรหัสผ่านตรงตัว (Plain Text) ตามที่พี่ต้องการ
             if db_pass == p:
                 session.update({
-                    'username': user.get('username'), 
+                    'username': user.get('username'), # เก็บชื่อสะกดจริงจาก DB
                     'displayname': user.get('displayname', u), 
                     'permission': user.get('permission', 'User')
                 })
@@ -145,7 +145,8 @@ def import_students():
 @admin_required
 def update_user(username):
     data = request.json
-    if username.lower() == 'admin' or username == session['username']:
+    # ห้ามเปลี่ยนสิทธิ์ตัวเองหรือ admin หลัก
+    if username.lower() == 'admin' or username == session.get('username'):
         perm = mongo.db.users.find_one({"username": username}).get('permission')
     else: perm = data.get('permission')
     mongo.db.users.update_one({"username": username}, {"$set": {"displayname": data.get('displayname'), "permission": perm}})
@@ -155,11 +156,12 @@ def update_user(username):
 @login_required
 @admin_required
 def delete_user(username):
-    if username.lower() != 'admin' and username != session['username']:
+    # ป้องกันการลบตัวเองหรือ admin หลัก
+    if username.lower() != 'admin' and username != session.get('username'):
         mongo.db.users.delete_one({"username": username})
         mongo.db.user_access.delete_many({"username": username})
         return jsonify({"success": True})
-    return jsonify({"success": False})
+    return jsonify({"success": False, "message": "ไม่สามารถลบผู้ดูแลระบบหลักได้"})
 
 @app.route('/api/get_user_access/<username>')
 @login_required
@@ -207,6 +209,7 @@ def ask_ai():
             access = list(mongo.db.user_access.find({"username": username}))
             gs = [a.get('accessible_grade') for a in access if a.get('accessible_grade')]
             sids = [a.get('accessible_student_id') for a in access if a.get('accessible_student_id')]
+            # กรองข้อมูลนักเรียนตามสิทธิ์ที่ได้รับ
             query = {"$or": [{"grade": {"$in": gs}}, {"_id": {"$in": [ObjectId(sid) for sid in sids if sid]}}]} if gs or sids else {"_id": None}
             students = list(mongo.db.students.find(query))
     except: students = []
@@ -236,4 +239,5 @@ def setting_page(): return render_template('setting.html')
 def student_list_page(): return render_template('student_list.html')
 
 if __name__ == "__main__":
+    # รันบนเครื่องตัวเองที่ Port 8000
     app.run(debug=True, host='0.0.0.0', port=8000)
