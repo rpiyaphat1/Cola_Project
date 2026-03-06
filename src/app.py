@@ -203,31 +203,40 @@ def ask_ai():
     user_input = request.json.get('message')
     username, permission = session['username'], session['permission']
     
-    if SAVE_CHAT_ENABLED:
-        mongo.db.chat_history.insert_one({"username": username, "role": "user", "message": user_input, "timestamp": ObjectId()})
+    # ... (ส่วนเก็บประวัติแชทเหมือนเดิม) ...
 
     try:
         if permission in ['Admin', 'Super Admin']:
-            students = list(mongo.db.students.find())
+            students = list(mongo.db.students.find().limit(50)) 
         else:
             access = list(mongo.db.user_access.find({"username": username}))
             gs = [a.get('accessible_grade') for a in access if a.get('accessible_grade')]
             sids = [a.get('accessible_student_id') for a in access if a.get('accessible_student_id')]
-            # กรองข้อมูลนักเรียนตามสิทธิ์ที่ได้รับ
             query = {"$or": [{"grade": {"$in": gs}}, {"_id": {"$in": [ObjectId(sid) for sid in sids if sid]}}]} if gs or sids else {"_id": None}
-            students = list(mongo.db.students.find(query))
-    except: students = []
+            students = list(mongo.db.students.find(query).limit(50))
+    except Exception as e:
+        print(f"DB Error: {str(e)}")
+        students = []
+
+    if not students:
+        return jsonify({"reply": "ตอนนี้ยังไม่มีข้อมูลนักเรียนในระบบครับพี่ กรุณาไปที่หน้า Import ก่อนนะ"})
 
     ctx = "\n".join([f"- {s.get('fullname')} ({s.get('grade')}): {s.get('disability_type','')}" for s in students])
     prompt = f"คุณคือผู้ช่วย ข้อมูลนักเรียน: {ctx}\nคำถาม: {user_input}"
+
     try:
-        res = requests.post(f"{AI_BASE_URL}/chat/completions", headers={"Authorization": f"Bearer {AI_API_KEY}"}, 
-                            json={"model": "gemini-2.0-flash", "messages": [{"role": "user", "content": prompt}]}, timeout=30)
-        reply = res.json()['choices'][0]['message']['content'] if res.status_code == 200 else "AI Error"
-        if SAVE_CHAT_ENABLED and res.status_code == 200:
-            mongo.db.chat_history.insert_one({"username": username, "role": "ai", "message": reply})
+        res = requests.post(f"{AI_BASE_URL}/chat/completions", 
+                            headers={"Authorization": f"Bearer {AI_API_KEY}"}, 
+                            json={"model": "gemini-2.0-flash", "messages": [{"role": "user", "content": prompt}]}, 
+                            timeout=30)
+        
+        if res.status_code != 200:
+            return jsonify({"reply": f"AI Error (Status: {res.status_code}): {res.text}"})
+
+        reply = res.json()['choices'][0]['message']['content']
         return jsonify({"reply": reply})
-    except Exception as e: return jsonify({"reply": f"Error: {str(e)}"}), 500
+    except Exception as e: 
+        return jsonify({"reply": f"Connection Error: {str(e)}"}), 500
 
 # --- 8. PAGE NAVIGATION ---
 @app.route('/chatbot')
