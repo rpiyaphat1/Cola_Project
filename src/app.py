@@ -6,6 +6,8 @@ from functools import wraps
 from flask import Flask, render_template, request, jsonify, url_for, redirect, session, flash, send_from_directory
 from flask_pymongo import PyMongo
 from bson.objectid import ObjectId
+import pandas as pd 
+import io
 
 try:
     from dotenv import load_dotenv
@@ -130,16 +132,64 @@ def admin_dashboard():
 def admin_import_page():
     return render_template('admin_import.html')
 
-@app.route('/api/import_students', methods=['POST'])
+# --- 2. API สำหรับอัปโหลดไฟล์ Excel/CSV (จากปุ่ม startUpload) ---
+@app.route('/api/import_excel', methods=['POST'])
 @login_required
 @admin_required
-def import_students():
+def import_excel():
+    try:
+        if 'file' not in request.files:
+            return jsonify({"success": False, "error": "ไม่พบไฟล์ที่ส่งมาครับพี่"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"success": False, "error": "พี่ไม่ได้เลือกไฟล์ครับ"}), 400
+
+        filename = file.filename.lower()
+        
+        # อ่านไฟล์ตามประเภท
+        if filename.endswith('.xlsx'):
+            df = pd.read_excel(file)
+        elif filename.endswith('.csv'):
+            df = pd.read_csv(file)
+        else:
+            return jsonify({"success": False, "error": "รองรับเฉพาะ .xlsx และ .csv เท่านั้นครับ"}), 400
+
+        # ล้างค่าว่างให้ MongoDB อ่านออก
+        df = df.where(pd.notnull(df), None)
+        data = df.to_dict(orient='records')
+
+        if data:
+            # ✨ บันทึกลง Collection 'students' ทันที
+            mongo.db.students.insert_many(data)
+            return jsonify({"success": True, "message": f"นำเข้าข้อมูลสำเร็จ {len(data)} รายการแล้วครับ!"})
+        
+        return jsonify({"success": False, "error": "ไฟล์นี้ไม่มีข้อมูลเลยพี่"}), 400
+
+    except Exception as e:
+        print(f"Excel Import Error: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# --- 3. API สำหรับบันทึกรายคน (จากปุ่ม saveStudent) ---
+@app.route('/api/add_student', methods=['POST'])
+@login_required
+@admin_required
+def add_student():
     try:
         data = request.json
-        if not data or not isinstance(data, list):
-            return jsonify({"success": False, "message": "Invalid format"}), 400
-        mongo.db.students.insert_many(data)
-        return jsonify({"success": True, "count": len(data)})
+        if not data.get('fullname') or not data.get('grade'):
+            return jsonify({"success": False, "message": "กรุณาระบุชื่อและชั้นเรียนด้วยครับ"}), 400
+            
+        # บันทึกลง MongoDB
+        mongo.db.students.insert_one({
+            "nickname": data.get('nickname'),
+            "fullname": data.get('fullname'),
+            "grade": data.get('grade'),
+            "disability_type": data.get('disability_type'),
+            "technique": data.get('technique'),
+            "timestamp": ObjectId() # เก็บเวลาสร้างไว้หน่อย
+        })
+        return jsonify({"success": True, "message": "บันทึกข้อมูลนักเรียนสำเร็จครับ!"})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
@@ -199,44 +249,46 @@ def revoke_access(access_id):
 @app.route('/ask_ai', methods=['POST'])
 @login_required
 def ask_ai():
-    global SAVE_CHAT_ENABLED
     user_input = request.json.get('message')
-    username, permission = session['username'], session['permission']
+    username = session.get('username')
+    permission = session.get('permission')
     
-    # ... (ส่วนเก็บประวัติแชทเหมือนเดิม) ...
-
+    # 1. ลองดึงข้อมูลนักเรียน (ถ้ามี)
     try:
-        if permission in ['Admin', 'Super Admin']:
-            students = list(mongo.db.students.find().limit(50)) 
-        else:
-            access = list(mongo.db.user_access.find({"username": username}))
-            gs = [a.get('accessible_grade') for a in access if a.get('accessible_grade')]
-            sids = [a.get('accessible_student_id') for a in access if a.get('accessible_student_id')]
-            query = {"$or": [{"grade": {"$in": gs}}, {"_id": {"$in": [ObjectId(sid) for sid in sids if sid]}}]} if gs or sids else {"_id": None}
-            students = list(mongo.db.students.find(query).limit(50))
-    except Exception as e:
-        print(f"DB Error: {str(e)}")
+        students = list(mongo.db.students.find().limit(20))
+    except:
         students = []
 
-    if not students:
-        return jsonify({"reply": "ตอนนี้ยังไม่มีข้อมูลนักเรียนในระบบครับพี่ กรุณาไปที่หน้า Import ก่อนนะ"})
-
-    ctx = "\n".join([f"- {s.get('fullname')} ({s.get('grade')}): {s.get('disability_type','')}" for s in students])
-    prompt = f"คุณคือผู้ช่วย ข้อมูลนักเรียน: {ctx}\nคำถาม: {user_input}"
+    # 2. สร้าง Context (ถ้าไม่มีนักเรียน ก็ให้เป็นค่าว่างไป)
+    if students:
+        ctx = "\n".join([f"- {s.get('fullname')} ({s.get('grade')})" for s in students])
+        prompt = f"ข้อมูลนักเรียนที่มีในระบบ:\n{ctx}\n\nคำถามจากผู้ใช้: {user_input}"
+    else:
+        # 💡 ถ้าไม่มีข้อมูลนักเรียน ให้ AI ตอบแบบทั่วไปเพื่อทดสอบการเชื่อมต่อ
+        prompt = f"ระบบกำลังอยู่ในโหมดทดสอบ (ยังไม่มีข้อมูลนักเรียนใน DB)\nคำถามคือ: {user_input}"
 
     try:
-        res = requests.post(f"{AI_BASE_URL}/chat/completions", 
-                            headers={"Authorization": f"Bearer {AI_API_KEY}"}, 
-                            json={"model": "gemini-2.0-flash", "messages": [{"role": "user", "content": prompt}]}, 
-                            timeout=30)
+        # 3. ยิงไปหา AI API (ใช้ Key จาก Vercel Settings)
+        res = requests.post(
+            f"{AI_BASE_URL}/chat/completions", 
+            headers={"Authorization": f"Bearer {AI_API_KEY}"}, 
+            json={
+                "model": "gemini-2.0-flash", 
+                "messages": [{"role": "user", "content": prompt}]
+            }, 
+            timeout=30
+        )
         
-        if res.status_code != 200:
-            return jsonify({"reply": f"AI Error (Status: {res.status_code}): {res.text}"})
+        if res.status_code == 200:
+            reply = res.json()['choices'][0]['message']['content']
+        else:
+            reply = f"AI ตอบกลับไม่ได้ (Error: {res.status_code})"
+            print(f"AI API Log: {res.text}") # ดูใน Vercel Runtime Logs
 
-        reply = res.json()['choices'][0]['message']['content']
         return jsonify({"reply": reply})
-    except Exception as e: 
-        return jsonify({"reply": f"Connection Error: {str(e)}"}), 500
+
+    except Exception as e:
+        return jsonify({"reply": f"การเชื่อมต่อผิดพลาด: {str(e)}"}), 500
 
 # --- 8. PAGE NAVIGATION ---
 @app.route('/chatbot')
