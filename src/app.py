@@ -1,6 +1,7 @@
 import os
 import requests
 import json
+import re  # ✅ สำหรับการค้นหาแบบไม่สนตัวพิมพ์เล็ก-ใหญ่
 from functools import wraps
 from flask import Flask, render_template, request, jsonify, url_for, redirect, session, flash, send_from_directory
 from flask_pymongo import PyMongo
@@ -15,7 +16,7 @@ except ImportError:
     pass
 
 app = Flask(__name__) 
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_2026_super_secure')
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_2026_super_secure_final')
 
 # --- 1. Database Config ---
 app.config["MONGO_URI"] = os.environ.get('MY_DB_URL')
@@ -36,13 +37,15 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if session.get('permission') not in ['Admin', 'Super Admin']:
+        # ✅ รองรับทั้ง Admin และ Super Admin ตามข้อมูลใน DB พี่
+        allowed = ['Admin', 'Super Admin']
+        if session.get('permission') not in allowed:
             flash('เฉพาะผู้ดูแลระบบเท่านั้น!', 'error')
             return redirect(url_for('chatbot_page'))
         return f(*args, **kwargs)
     return decorated_function
 
-# --- 3. Favicon (ดึงจาก static) ---
+# --- 3. Favicon ---
 @app.route('/favicon.ico')
 def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static'),
@@ -54,49 +57,46 @@ def login_page(): return render_template('login.html')
 
 @app.route('/login', methods=['POST'])
 def login():
-    u = request.form.get('username', '').strip().lower()
+    # รับค่าแบบตรงตัวและตัดช่องว่าง
+    u = request.form.get('username', '').strip()
     p = request.form.get('password', '').strip()
     try:
-        user = mongo.db.users.find_one({"username": u})
+        # ✅ แก้ให้หา "Admin" เจอแน่นอนด้วย Regex (Ignore Case)
+        user = mongo.db.users.find_one({"username": re.compile(f'^{u}$', re.IGNORECASE)})
         if user:
             db_pass = str(user.get('password')).strip()
-            # 🔒 รองรับทั้งรหัสผ่านใหม่ (Hash) และรหัสเก่า (Plain Text)
+            # 🔒 ตรวจสอบรหัสผ่าน: รองรับทั้ง Hash และแบบเดิม
             is_valid = check_password_hash(db_pass, p) if db_pass.startswith('pbkdf2:sha256') else (db_pass == p)
             
             if is_valid:
                 session.update({
-                    'username': u, 
+                    'username': user.get('username'), # ดึงชื่อจริงๆ จาก DB
                     'displayname': user.get('displayname', u), 
                     'permission': user.get('permission', 'User')
                 })
-                return redirect(url_for('admin_dashboard' if user.get('permission') in ['Admin', 'Super Admin'] else 'chatbot_page'))
+                # แยกทางตามสิทธิ์ Admin/Super Admin ไป Dashboard
+                if user.get('permission') in ['Admin', 'Super Admin']:
+                    return redirect(url_for('admin_dashboard'))
+                return redirect(url_for('chatbot_page'))
     except Exception as e:
         print(f"Login Error: {str(e)}")
     flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'error')
     return redirect(url_for('login_page'))
-
-# 🛠️ Route พิเศษสำหรับแก้ปัญหารหัสผ่านไม่ตรงกัน (รันครั้งเดียว)
-@app.route('/api/fix_admin_password')
-def fix_admin_password():
-    # ระบบจะเจน Hash รหัสผ่านใหม่ที่ถูกต้องให้ admin ทันที
-    new_hashed = generate_password_hash('Aikku60')
-    mongo.db.users.update_one({"username": "admin"}, {"$set": {"password": new_hashed}})
-    return f"อัปเดตรหัส admin เป็น Hash เรียบร้อยแล้ว: {new_hashed}"
 
 @app.route('/register', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def register_page():
     if request.method == 'POST':
-        u = request.form.get('username', '').strip().lower()
+        u = request.form.get('username', '').strip()
         p = request.form.get('password', '').strip()
         d = request.form.get('displayname', '').strip()
         perm = request.form.get('permission', 'Teacher')
         
-        if mongo.db.users.find_one({"username": u}):
+        if mongo.db.users.find_one({"username": re.compile(f'^{u}$', re.IGNORECASE)}):
             flash('มีชื่อผู้ใช้นี้ในระบบแล้ว', 'error')
         else:
-            # 🔒 บันทึกแบบ Hash ทันทีเพื่อความปลอดภัย
+            # 🔒 บันทึกแบบ Hash ทันที
             mongo.db.users.insert_one({
                 "username": u,
                 "password": generate_password_hash(p),
@@ -110,7 +110,7 @@ def register_page():
 @app.route('/logout')
 def logout(): session.clear(); return redirect(url_for('login_page'))
 
-# --- 5. ADMIN DASHBOARD, IMPORT & ACCESS CONTROL ---
+# --- 5. ADMIN TOOLS (Dashboard & Import) ---
 @app.route('/admin_dashboard')
 @login_required
 @admin_required
@@ -137,18 +137,20 @@ def import_students():
     try:
         data = request.json
         if not data or not isinstance(data, list):
-            return jsonify({"success": False, "message": "Invalid format"}), 400
+            return jsonify({"success": False, "message": "ข้อมูลไม่ถูกต้อง"}), 400
         mongo.db.students.insert_many(data)
         return jsonify({"success": True, "count": len(data)})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
+# --- 6. USER & ACCESS MANAGEMENT (ห้ามลบเด็ดขาด) ---
 @app.route('/update_user/<username>', methods=['POST'])
 @login_required
 @admin_required
 def update_user(username):
     data = request.json
-    if username == 'admin' or username == session['username']:
+    # ล็อคไม่ให้เปลี่ยนสิทธิ์ตัวเองหรือ admin หลัก
+    if username.lower() == 'admin' or username == session['username']:
         perm = mongo.db.users.find_one({"username": username}).get('permission')
     else: perm = data.get('permission')
     mongo.db.users.update_one({"username": username}, {"$set": {"displayname": data.get('displayname'), "permission": perm}})
@@ -158,11 +160,11 @@ def update_user(username):
 @login_required
 @admin_required
 def delete_user(username):
-    if username != 'admin' and username != session['username']:
+    if username.lower() != 'admin' and username != session['username']:
         mongo.db.users.delete_one({"username": username})
         mongo.db.user_access.delete_many({"username": username})
         return jsonify({"success": True})
-    return jsonify({"success": False})
+    return jsonify({"success": False, "message": "ไม่สามารถลบผู้ดูแลระบบได้"})
 
 @app.route('/api/get_user_access/<username>')
 @login_required
@@ -192,7 +194,7 @@ def revoke_access(access_id):
     mongo.db.user_access.delete_one({"_id": ObjectId(access_id)})
     return jsonify({"success": True})
 
-# --- 6. AI CHAT & CONTROL ---
+# --- 7. AI CHAT ---
 @app.route('/ask_ai', methods=['POST'])
 @login_required
 def ask_ai():
@@ -233,7 +235,7 @@ def toggle_chat_save():
     SAVE_CHAT_ENABLED = request.json.get('enabled', False)
     return jsonify({"success": True, "enabled": SAVE_CHAT_ENABLED})
 
-# --- 7. PAGE NAVIGATION ---
+# --- 8. PAGE NAVIGATION (ห้ามลบ endpoint) ---
 @app.route('/chatbot')
 @login_required
 def chatbot_page(): return render_template('chatbot.html') 
