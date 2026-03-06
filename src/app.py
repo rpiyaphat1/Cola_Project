@@ -16,9 +16,11 @@ except ImportError:
     pass
 
 app = Flask(__name__) 
+# ✅ ใช้ Key ที่แน่นอนเพื่อความเสถียรของระบบ Login
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_2026_final_stable_version')
 
 # --- 1. Database Config ---
+# ✅ ตรวจสอบค่า MY_DB_URL ใน Vercel ให้ลงท้ายด้วย /IEPAssistant เสมอครับ
 app.config["MONGO_URI"] = os.environ.get('MY_DB_URL')
 mongo = PyMongo(app)
 
@@ -65,7 +67,6 @@ def login():
         
         if user:
             db_pass = user.get('password')
-            # ✅ เทียบรหัสผ่านแบบตรงตัว (Case-sensitive)
             if db_pass is not None and str(db_pass) == str(p):
                 session.update({
                     'username': user.get('username'),
@@ -126,7 +127,7 @@ def admin_dashboard():
 def admin_import_page():
     return render_template('admin_import.html')
 
-# --- 5. IMPORT SYSTEM (แก้ไขเรื่องหัวคอลัมน์ภาษาไทย) ---
+# --- 5. IMPORT SYSTEM ---
 @app.route('/api/import_excel', methods=['POST'])
 @login_required
 @admin_required
@@ -141,20 +142,16 @@ def import_excel():
 
         filename = file.filename.lower()
         
-        # อ่านไฟล์ตามประเภท
+        # ✅ เพิ่ม Encoding ภาษาไทยสำหรับ CSV
         if filename.endswith('.xlsx'):
             df = pd.read_excel(file)
         elif filename.endswith('.csv'):
-            df = pd.read_csv(file)
+            df = pd.read_csv(file, encoding='utf-8-sig')
         else:
             return jsonify({"success": False, "error": "รองรับเฉพาะ .xlsx และ .csv เท่านั้นครับ"}), 400
 
-        # ✅ เปลี่ยนชื่อหัวคอลัมน์จากภาษาไทยเป็นอังกฤษให้ตรงกับหน้าจอ
-        # 'ที่' ไม่ต้องเอาลง DB เพื่อความสะอาด
-        mapping = {
-            'ชื่อ-นามสกุล': 'fullname',
-            'ชั้น': 'grade'
-        }
+        # ✅ Mapping หัวคอลัมน์ภาษาไทยจากไฟล์ของพี่
+        mapping = {'ชื่อ-นามสกุล': 'fullname', 'ชั้น': 'grade'}
         df = df.rename(columns=mapping)
 
         # ล้างค่าว่างให้ MongoDB อ่านออก
@@ -162,6 +159,7 @@ def import_excel():
         data = df.to_dict(orient='records')
 
         if data:
+            # ✨ บันทึกลงตาราง students ใน Database หลักที่ตั้งไว้ใน MY_DB_URL
             mongo.db.students.insert_many(data)
             return jsonify({"success": True, "message": f"นำเข้าข้อมูลสำเร็จ {len(data)} รายการแล้วครับ!"})
         
@@ -247,11 +245,7 @@ def revoke_access(access_id):
 @login_required
 def ask_ai():
     user_input = request.json.get('message')
-    username = session.get('username')
-    permission = session.get('permission')
-    
     try:
-        # ดึงรายชื่อนักเรียนมาเป็น Context (จำกัดเพื่อไม่ให้ Token เต็ม)
         students = list(mongo.db.students.find().limit(50))
     except:
         students = []
@@ -263,12 +257,11 @@ def ask_ai():
         prompt = f"ระบบกำลังทดสอบ (ยังไม่มีข้อมูลใน DB)\nคำถามคือ: {user_input}"
 
     try:
-        # ✅ เรียกใช้ Key จาก Vercel (ต้อง Redeploy เพื่อให้ค่าอัปเดต)
         res = requests.post(
             f"{AI_BASE_URL}/chat/completions", 
             headers={"Authorization": f"Bearer {AI_API_KEY}"}, 
             json={
-                "model": "gemini-2.5-flash", 
+                "model": "gemini-2.5-flash",
                 "messages": [{"role": "user", "content": prompt}]
             }, 
             timeout=30
@@ -277,7 +270,6 @@ def ask_ai():
         if res.status_code == 200:
             reply = res.json()['choices'][0]['message']['content']
         else:
-            # 401 แก้โดยการ Redeploy ใน Vercel
             reply = f"AI ตอบกลับไม่ได้ (Error: {res.status_code})"
             print(f"AI API Log: {res.text}") 
 
@@ -297,7 +289,10 @@ def setting_page(): return render_template('setting.html')
 
 @app.route('/student_list')
 @login_required
-def student_list_page(): return render_template('student_list.html')
+def student_list_page():
+    # ✅ ดึงข้อมูลมาแสดงที่หน้าจอ
+    students = list(mongo.db.students.find())
+    return render_template('student_list.html', students=students)
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=8000)
