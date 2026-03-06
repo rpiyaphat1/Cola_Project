@@ -55,33 +55,33 @@ def login_page(): return render_template('login.html')
 
 @app.route('/login', methods=['POST'])
 def login():
+    # 1. รับค่าและล้างช่องว่าง
     u = request.form.get('username', '').strip()
-    p = request.form.get('password', '') # ❌ ไม่ต้อง .strip() ที่รหัสผ่านเพื่อให้ได้ค่าจริง
+    p = request.form.get('password', '').strip()
     
     try:
-        # ✅ ค้นหา Username แบบ Case-insensitive
+        # 2. ค้นหา username (ไม่สนตัวเล็กใหญ่)
         user = mongo.db.users.find_one({"username": re.compile(f'^{u}$', re.IGNORECASE)})
         
         if user:
-            # ✅ ดึงค่า Password จาก DB มาตรวจสอบก่อนว่าเป็น None ไหม
-            raw_db_pass = user.get('password')
-            
-            if raw_db_pass is not None:
-                # ✅ แปลงเป็น String แค่ตัวข้อมูลข้างในจริงๆ
-                db_pass = str(raw_db_pass)
+            # 3. ดึงค่าจาก DB และล้าง Encoding ที่อาจจะเพี้ยน
+            db_pass_raw = user.get('password', '')
+            # แปลงเป็น string และล้างตัวอักษรล่องหน
+            db_pass = str(db_pass_raw).encode('ascii', 'ignore').decode('ascii').strip()
+            input_pass = p.encode('ascii', 'ignore').decode('ascii').strip()
+
+            # ✅ เทียบกันตรงๆ (A1234 == A1234)
+            if db_pass == input_pass:
+                session.update({
+                    'username': user.get('username'),
+                    'displayname': user.get('displayname', u),
+                    'permission': user.get('permission', 'User')
+                })
+                # รองรับสิทธิ์ Super Admin ตามรูปพี่
+                if user.get('permission') in ['Admin', 'Super Admin']:
+                    return redirect(url_for('admin_dashboard'))
+                return redirect(url_for('chatbot_page'))
                 
-                # ✅ เทียบรหัสผ่านแบบตรงตัว (Case-sensitive สำหรับรหัสผ่าน)
-                if db_pass == p:
-                    session.update({
-                        'username': user.get('username'),
-                        'displayname': user.get('displayname', u),
-                        'permission': user.get('permission', 'User')
-                    })
-                    
-                    if user.get('permission') in ['Admin', 'Super Admin']:
-                        return redirect(url_for('admin_dashboard'))
-                    return redirect(url_for('chatbot_page'))
-                    
     except Exception as e:
         print(f"Login Error: {str(e)}")
         
