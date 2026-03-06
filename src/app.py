@@ -56,27 +56,30 @@ def login_page(): return render_template('login.html')
 @app.route('/login', methods=['POST'])
 def login():
     u = request.form.get('username', '').strip()
-    pw = request.form.get('password', '').strip() 
-
+    p = request.form.get('password', '').strip() # รับค่า 1234 มา
+    
     try:
-        account = mongo.db.users.find_one({"username": re.compile(f'^{u}$', re.IGNORECASE)})
+        # 1. ค้นหา User แบบไม่สนตัวเล็กใหญ่
+        user = mongo.db.users.find_one({"username": re.compile(f'^{u}$', re.IGNORECASE)})
         
-        if account:
-            if str(account.get('password')) == pw:
+        if user:
+            # 2. ดึงรหัสจาก DB มาเป็น String ตรงๆ (ห้าม encode/decode มั่วซั่ว)
+            db_pass = str(user.get('password', '')).strip() 
+
+            # 3. เทียบกันโง่ๆ แบบที่พี่ต้องการ (A1234 == 1234 -> False แน่นอน)
+            if db_pass == p:
                 session.update({
-                    'username': account.get('username'),
-                    'displayname': account.get('displayname', u),
-                    'permission': account.get('permission', 'User')
+                    'username': user.get('username'),
+                    'displayname': user.get('displayname', u),
+                    'permission': user.get('permission', 'User')
                 })
-                
-                if account.get('permission') in ['Admin', 'Super Admin']:
+                if user.get('permission') in ['Admin', 'Super Admin']:
                     return redirect(url_for('admin_dashboard'))
                 return redirect(url_for('chatbot_page'))
                 
     except Exception as e:
-        print(f"❌ Database Error: {e}")
+        print(f"Login Error: {str(e)}")
         
-    # ถ้าไม่ตรงหรือหาไม่เจอ ให้เด้งกลับหน้า Login พร้อมแจ้งเตือน
     flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'error')
     return redirect(url_for('login_page'))
 
