@@ -55,22 +55,17 @@ def login_page(): return render_template('login.html')
 
 @app.route('/login', methods=['POST'])
 def login():
-    # 1. รับค่าและล้างช่องว่าง
     u = request.form.get('username', '').strip()
-    p = request.form.get('password', '').strip()
+    p = request.form.get('password', '') # รับค่ารหัสผ่านดิบๆ มาเลย
     
     try:
-        # 2. ค้นหา username (ไม่สนตัวเล็กใหญ่)
+        # 1. ค้นหา User แบบไม่สนตัวเล็กใหญ่ (เพื่อให้เจอ "admin" หรือ "Admin")
         user = mongo.db.users.find_one({"username": re.compile(f'^{u}$', re.IGNORECASE)})
         
         if user:
-            # 3. ดึงค่าจาก DB และล้าง Encoding ที่อาจจะเพี้ยน
-            db_pass_raw = user.get('password', '')
-            # แปลงเป็น string และล้างตัวอักษรล่องหน
-            db_pass = str(db_pass_raw).encode('ascii', 'ignore').decode('ascii').strip()
-            input_pass = p.encode('ascii', 'ignore').decode('ascii').strip()
+            db_pass = str(user.get('password', '')).strip()
+            input_pass = str(p).strip()
 
-            # ✅ เทียบกันตรงๆ (A1234 == A1234)
             if db_pass == input_pass:
                 session.update({
                     'username': user.get('username'),
@@ -94,7 +89,7 @@ def login():
 def register_page():
     if request.method == 'POST':
         u = request.form.get('username', '').strip()
-        p = request.form.get('password', '').strip()
+        p = request.form.get('password')
         d = request.form.get('displayname', '').strip()
         perm = request.form.get('permission', 'Teacher')
         
@@ -103,7 +98,7 @@ def register_page():
         else:
             mongo.db.users.insert_one({
                 "username": u,
-                "password": p, # บันทึกแบบธรรมดา
+                "password": p,
                 "displayname": d,
                 "permission": perm
             })
@@ -114,7 +109,6 @@ def register_page():
 @app.route('/logout')
 def logout(): session.clear(); return redirect(url_for('login_page'))
 
-# --- 5. ADMIN TOOLS (Dashboard & Import) ---
 @app.route('/admin_dashboard')
 @login_required
 @admin_required
