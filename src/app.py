@@ -56,30 +56,27 @@ def login_page(): return render_template('login.html')
 @app.route('/login', methods=['POST'])
 def login():
     u = request.form.get('username', '').strip()
-    p = request.form.get('password', '') # รับค่ารหัสผ่านดิบๆ มาเลย
-    
-    try:
-        # 1. ค้นหา User แบบไม่สนตัวเล็กใหญ่ (เพื่อให้เจอ "admin" หรือ "Admin")
-        user = mongo.db.users.find_one({"username": re.compile(f'^{u}$', re.IGNORECASE)})
-        
-        if user:
-            db_pass = str(user.get('password', '')).strip()
-            input_pass = str(p).strip()
+    pw = request.form.get('password', '').strip() 
 
-            if db_pass == input_pass:
+    try:
+        account = mongo.db.users.find_one({"username": re.compile(f'^{u}$', re.IGNORECASE)})
+        
+        if account:
+            if str(account.get('password')) == pw:
                 session.update({
-                    'username': user.get('username'),
-                    'displayname': user.get('displayname', u),
-                    'permission': user.get('permission', 'User')
+                    'username': account.get('username'),
+                    'displayname': account.get('displayname', u),
+                    'permission': account.get('permission', 'User')
                 })
-                # รองรับสิทธิ์ Super Admin ตามรูปพี่
-                if user.get('permission') in ['Admin', 'Super Admin']:
+                
+                if account.get('permission') in ['Admin', 'Super Admin']:
                     return redirect(url_for('admin_dashboard'))
                 return redirect(url_for('chatbot_page'))
                 
     except Exception as e:
-        print(f"Login Error: {str(e)}")
+        print(f"❌ Database Error: {e}")
         
+    # ถ้าไม่ตรงหรือหาไม่เจอ ให้เด้งกลับหน้า Login พร้อมแจ้งเตือน
     flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'error')
     return redirect(url_for('login_page'))
 
