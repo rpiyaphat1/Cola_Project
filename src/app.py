@@ -5,7 +5,7 @@ from functools import wraps
 from flask import Flask, render_template, request, jsonify, url_for, redirect, session, flash, send_from_directory
 from flask_pymongo import PyMongo
 from bson.objectid import ObjectId
-# 🔒 เพิ่มระบบ Security สำหรับ Hash รหัสผ่าน
+# 🔒 ระบบ Security สำหรับ Hash รหัสผ่าน
 from werkzeug.security import generate_password_hash, check_password_hash
 
 try:
@@ -17,7 +17,7 @@ except ImportError:
 app = Flask(__name__) 
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_2026_super_secure')
 
-# --- 1. Database Config (IEP Database) ---
+# --- 1. Database Config ---
 app.config["MONGO_URI"] = os.environ.get('MY_DB_URL')
 mongo = PyMongo(app)
 
@@ -75,6 +75,14 @@ def login():
     flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'error')
     return redirect(url_for('login_page'))
 
+# 🛠️ Route พิเศษสำหรับแก้ปัญหารหัสผ่านไม่ตรงกัน (รันครั้งเดียว)
+@app.route('/api/fix_admin_password')
+def fix_admin_password():
+    # ระบบจะเจน Hash รหัสผ่านใหม่ที่ถูกต้องให้ admin ทันที
+    new_hashed = generate_password_hash('Aikku60')
+    mongo.db.users.update_one({"username": "admin"}, {"$set": {"password": new_hashed}})
+    return f"อัปเดตรหัส admin เป็น Hash เรียบร้อยแล้ว: {new_hashed}"
+
 @app.route('/register', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -102,7 +110,7 @@ def register_page():
 @app.route('/logout')
 def logout(): session.clear(); return redirect(url_for('login_page'))
 
-# --- 5. ADMIN DASHBOARD & DATA IMPORT ---
+# --- 5. ADMIN DASHBOARD, IMPORT & ACCESS CONTROL ---
 @app.route('/admin_dashboard')
 @login_required
 @admin_required
@@ -110,19 +118,24 @@ def admin_dashboard():
     try:
         users = list(mongo.db.users.find())
         all_students = list(mongo.db.students.find().sort("fullname", 1))
-        # ดึงชั้นเรียนแบบไม่ซ้ำสำหรับตัวกรอง
         all_grades = sorted(list(set([s.get('grade') for s in all_students if s.get('grade')])))
         for s in all_students: s['id'] = str(s['_id'])
         return render_template('admin_dashboard.html', users=users, all_students=all_students, all_grades=all_grades)
     except Exception as e:
         return render_template('admin_dashboard.html', users=[], all_students=[], all_grades=[], error=str(e))
 
+@app.route('/admin_import')
+@login_required
+@admin_required
+def admin_import_page():
+    return render_template('admin_import.html')
+
 @app.route('/api/import_students', methods=['POST'])
 @login_required
 @admin_required
 def import_students():
     try:
-        data = request.json # รับข้อมูลเป็น Array ของ Object
+        data = request.json
         if not data or not isinstance(data, list):
             return jsonify({"success": False, "message": "Invalid format"}), 400
         mongo.db.students.insert_many(data)
@@ -130,7 +143,6 @@ def import_students():
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-# --- 6. USER & ACCESS MANAGEMENT API ---
 @app.route('/update_user/<username>', methods=['POST'])
 @login_required
 @admin_required
@@ -180,7 +192,7 @@ def revoke_access(access_id):
     mongo.db.user_access.delete_one({"_id": ObjectId(access_id)})
     return jsonify({"success": True})
 
-# --- 7. AI CHAT & CONTROL ---
+# --- 6. AI CHAT & CONTROL ---
 @app.route('/ask_ai', methods=['POST'])
 @login_required
 def ask_ai():
@@ -221,7 +233,7 @@ def toggle_chat_save():
     SAVE_CHAT_ENABLED = request.json.get('enabled', False)
     return jsonify({"success": True, "enabled": SAVE_CHAT_ENABLED})
 
-# --- 8. PAGE NAVIGATION ---
+# --- 7. PAGE NAVIGATION ---
 @app.route('/chatbot')
 @login_required
 def chatbot_page(): return render_template('chatbot.html') 
