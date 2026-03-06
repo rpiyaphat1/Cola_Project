@@ -1,7 +1,7 @@
 import os
 import requests
 import json
-import re  # ✅ สำหรับการค้นหาแบบไม่สนตัวพิมพ์เล็ก-ใหญ่
+import re
 from functools import wraps
 from flask import Flask, render_template, request, jsonify, url_for, redirect, session, flash, send_from_directory
 from flask_pymongo import PyMongo
@@ -16,24 +16,35 @@ except ImportError:
     pass
 
 app = Flask(__name__) 
-# ✅ ใช้ Key ที่แน่นอนเพื่อความเสถียรของระบบ Login
+
+# ✅ Secret Key สำหรับรักษาความปลอดภัยของระบบ Session
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_2026_final_stable_version')
 
-# --- 1. Database Config ---
-# ✅ แอปจะดึงค่าจาก MY_DB_URL ใน Vercel (ต้องระบุชื่อ DB ต่อท้าย เช่น /IEP)
+# ---------------------------------------------------------
+# 1. DATABASE CONFIGURATION
+# ---------------------------------------------------------
+
+# ✅ เชื่อมต่อผ่าน MY_DB_URL (แนะนำให้ลงท้ายด้วย /users ใน Vercel)
 app.config["MONGO_URI"] = os.environ.get('MY_DB_URL')
+
 mongo = PyMongo(app)
 
-# ✅ ดึงค่าจาก Environment Variables ของ Vercel
+# ✅ ค่ากำหนดสำหรับ AI API
 AI_API_KEY = os.environ.get('AI_API_KEY')
+
 AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
+
 SAVE_CHAT_ENABLED = False
 
-# --- 2. Middleware (ตรวจสอบสิทธิ์) ---
+# ---------------------------------------------------------
+# 2. MIDDLEWARE & ACCESS CONTROL
+# ---------------------------------------------------------
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'username' not in session: return redirect(url_for('login_page'))
+        if 'username' not in session:
+            return redirect(url_for('login_page'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -42,20 +53,30 @@ def admin_required(f):
     def decorated_function(*args, **kwargs):
         allowed_roles = ['Admin', 'Super Admin']
         if session.get('permission') not in allowed_roles:
-            flash('เฉพาะผู้ดูแลระบบเท่านั้น!', 'error')
+            flash('เฉพาะผู้ดูแลระบบเท่านั้นที่มีสิทธิ์เข้าถึง!', 'error')
             return redirect(url_for('chatbot_page'))
         return f(*args, **kwargs)
     return decorated_function
 
-# --- 3. Favicon ---
+# ---------------------------------------------------------
+# 3. STATIC FILES & FAVICON
+# ---------------------------------------------------------
+
 @app.route('/favicon.ico')
 def favicon():
-    return send_from_directory(os.path.join(app.root_path, 'static'),
-                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
+    return send_from_directory(
+        os.path.join(app.root_path, 'static'),
+        'favicon.ico', 
+        mimetype='image/vnd.microsoft.icon'
+    )
 
-# --- 4. AUTH SYSTEM ---
+# ---------------------------------------------------------
+# 4. AUTHENTICATION SYSTEM
+# ---------------------------------------------------------
+
 @app.route('/')
-def login_page(): return render_template('login.html')
+def login_page():
+    return render_template('login.html')
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -63,23 +84,33 @@ def login():
     p = request.form.get('password', '') 
     
     try:
+        # ✅ ค้นหา User แบบไม่สนตัวพิมพ์เล็ก-ใหญ่
         user = mongo.db.users.find_one({"username": re.compile(f'^{u}$', re.IGNORECASE)})
         
         if user:
             db_pass = user.get('password')
+            # ✅ ตรวจสอบรหัสผ่านตรงตัว
             if db_pass is not None and str(db_pass) == str(p):
                 session.update({
                     'username': user.get('username'),
                     'displayname': user.get('displayname', u),
                     'permission': user.get('permission', 'User')
                 })
-                dest = 'admin_dashboard' if user.get('permission') in ['Admin', 'Super Admin'] else 'chatbot_page'
-                return redirect(url_for(dest))
+                
+                if user.get('permission') in ['Admin', 'Super Admin']:
+                    return redirect(url_for('admin_dashboard'))
+                else:
+                    return redirect(url_for('chatbot_page'))
                 
     except Exception as e:
-        print(f"❌ Login Error: {str(e)}")
+        print(f"❌ Login Database Error: {str(e)}")
         
-    flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'error')
+    flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง กรุณาลองใหม่ครับ', 'error')
+    return redirect(url_for('login_page'))
+
+@app.route('/logout')
+def logout():
+    session.clear()
     return redirect(url_for('login_page'))
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -93,7 +124,7 @@ def register_page():
         perm = request.form.get('permission', 'Teacher')
         
         if mongo.db.users.find_one({"username": re.compile(f'^{u}$', re.IGNORECASE)}):
-            flash('มีชื่อผู้ใช้นี้ในระบบแล้ว', 'error')
+            flash('มีชื่อผู้ใช้นี้ในระบบแล้วครับ', 'error')
         else:
             mongo.db.users.insert_one({
                 "username": u,
@@ -101,14 +132,28 @@ def register_page():
                 "displayname": d,
                 "permission": perm
             })
-            flash('ลงทะเบียนสำเร็จ!', 'success')
+            flash('ลงทะเบียนผู้ใช้สำเร็จ!', 'success')
             return redirect(url_for('admin_dashboard'))
+            
     return render_template('register.html')
 
-@app.route('/logout')
-def logout(): session.clear(); return redirect(url_for('login_page'))
+# 🚀 ทางด่วนสร้าง Admin เมื่อย้าย Database ใหม่ (ID: admin / Pass: A1234)
+@app.route('/setup_admin')
+def setup_admin():
+    if not mongo.db.users.find_one({"username": "admin"}):
+        mongo.db.users.insert_one({
+            "username": "admin",
+            "password": "A1234",
+            "displayname": "Super Admin",
+            "permission": "Super Admin"
+        })
+        return "สร้างบัญชี Admin เริ่มต้นสำเร็จ! (admin / A1234) พี่ไปล็อกอินได้เลยครับ"
+    return "ระบบมีบัญชี Admin อยู่แล้วใน Database นี้ครับ"
 
-# --- 5. DASHBOARD & USER MANAGEMENT ---
+# ---------------------------------------------------------
+# 5. ADMIN DASHBOARD & USER MANAGEMENT
+# ---------------------------------------------------------
+
 @app.route('/admin_dashboard')
 @login_required
 @admin_required
@@ -116,27 +161,45 @@ def admin_dashboard():
     try:
         users = list(mongo.db.users.find())
         all_students = list(mongo.db.students.find().sort("fullname", 1))
+        
+        # กรองรายการชั้นเรียนที่มีอยู่จริงมาโชว์ใน Filter
         all_grades = sorted(list(set([s.get('grade') for s in all_students if s.get('grade')])))
-        for s in all_students: s['id'] = str(s['_id'])
-        return render_template('admin_dashboard.html', users=users, all_students=all_students, all_grades=all_grades)
+        
+        for s in all_students:
+            s['id'] = str(s['_id'])
+            
+        return render_template(
+            'admin_dashboard.html', 
+            users=users, 
+            all_students=all_students, 
+            all_grades=all_grades
+        )
     except Exception as e:
-        return render_template('admin_dashboard.html', users=[], all_students=[], all_grades=[], error=str(e))
+        return render_template('admin_dashboard.html', error=str(e))
 
 @app.route('/update_user/<username>', methods=['POST'])
 @login_required
 @admin_required
 def update_user(username):
     data = request.json
+    
+    # ห้ามเปลี่ยนสิทธิ์ตัวเองหรือบัญชี admin หลักเพื่อความปลอดภัย
     if username.lower() == 'admin' or username == session.get('username'):
         perm = mongo.db.users.find_one({"username": username}).get('permission')
-    else: perm = data.get('permission')
-    mongo.db.users.update_one({"username": username}, {"$set": {"displayname": data.get('displayname'), "permission": perm}})
+    else:
+        perm = data.get('permission')
+        
+    mongo.db.users.update_one(
+        {"username": username}, 
+        {"$set": {"displayname": data.get('displayname'), "permission": perm}}
+    )
     return jsonify({"success": True})
 
 @app.route('/delete_user/<username>', methods=['POST'])
 @login_required
 @admin_required
 def delete_user(username):
+    # ป้องกันการลบตัวเองหรือลบ admin
     if username.lower() != 'admin' and username != session.get('username'):
         mongo.db.users.delete_one({"username": username})
         mongo.db.user_access.delete_many({"username": username})
@@ -148,7 +211,8 @@ def delete_user(username):
 @admin_required
 def get_user_access(username):
     accs = list(mongo.db.user_access.find({"username": username}))
-    for a in accs: a['id'] = str(a['_id'])
+    for a in accs:
+        a['id'] = str(a['_id'])
     return jsonify({"access": accs})
 
 @app.route('/api/grant_access', methods=['POST'])
@@ -171,7 +235,10 @@ def revoke_access(access_id):
     mongo.db.user_access.delete_one({"_id": ObjectId(access_id)})
     return jsonify({"success": True})
 
-# --- 6. IMPORT SYSTEM & STUDENT MANAGEMENT ---
+# ---------------------------------------------------------
+# 6. IMPORT SYSTEM & STUDENT DATA
+# ---------------------------------------------------------
+
 @app.route('/admin_import')
 @login_required
 @admin_required
@@ -187,18 +254,15 @@ def import_excel():
             return jsonify({"success": False, "error": "ไม่พบไฟล์ที่ส่งมาครับพี่"}), 400
         
         file = request.files['file']
-        if file.filename == '':
-            return jsonify({"success": False, "error": "พี่ไม่ได้เลือกไฟล์ครับ"}), 400
-
         filename = file.filename.lower()
         
-        # ✅ เพิ่ม Encoding ภาษาไทยสำหรับ CSV
+        # ✅ อ่านไฟล์รองรับภาษาไทย (UTF-8)
         if filename.endswith('.xlsx'):
             df = pd.read_excel(file)
         elif filename.endswith('.csv'):
             df = pd.read_csv(file, encoding='utf-8-sig')
         else:
-            return jsonify({"success": False, "error": "รองรับเฉพาะ .xlsx และ .csv เท่านั้นครับ"}), 400
+            return jsonify({"success": False, "error": "กรุณาใช้ไฟล์ .xlsx หรือ .csv เท่านั้นครับ"}), 400
 
         # ✅ Mapping หัวคอลัมน์ภาษาไทยจากไฟล์ของพี่
         mapping = {'ชื่อ-นามสกุล': 'fullname', 'ชั้น': 'grade'}
@@ -209,11 +273,11 @@ def import_excel():
         data = df.to_dict(orient='records')
 
         if data:
-            # ✨ บันทึกลงตาราง students ใน Database หลักที่ตั้งไว้ใน MY_DB_URL
+            # ✨ บันทึกลงตาราง students ใน Database หลักที่ตั้งไว้
             mongo.db.students.insert_many(data)
-            return jsonify({"success": True, "message": f"นำเข้าข้อมูลสำเร็จ {len(data)} รายการแล้วครับ!"})
+            return jsonify({"success": True, "message": f"นำเข้าสำเร็จ {len(data)} รายการครับ!"})
         
-        return jsonify({"success": False, "error": "ไฟล์นี้ไม่มีข้อมูลเลยพี่"}), 400
+        return jsonify({"success": False, "error": "ไฟล์นี้ไม่มีข้อมูลนักเรียนเลยพี่"}), 400
 
     except Exception as e:
         print(f"Excel Import Error: {str(e)}")
@@ -240,23 +304,22 @@ def add_student():
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-# --- 7. AI CHAT ---
+# ---------------------------------------------------------
+# 7. AI CHAT SYSTEM (GEMINI-2.5-FLASH)
+# ---------------------------------------------------------
+
 @app.route('/ask_ai', methods=['POST'])
 @login_required
 def ask_ai():
     user_input = request.json.get('message')
+    
     try:
+        # ดึงรายชื่อนักเรียนมาเป็น Context ให้ AI (จำกัด 50 คนป้องกัน Token เต็ม)
         students = list(mongo.db.students.find().limit(50))
-    except:
-        students = []
-
-    if students:
         ctx = "\n".join([f"- {s.get('fullname')} ({s.get('grade')})" for s in students])
         prompt = f"ข้อมูลนักเรียนในระบบ:\n{ctx}\n\nคำถาม: {user_input}"
-    else:
-        prompt = f"ระบบกำลังทดสอบ (ยังไม่มีข้อมูลใน DB)\nคำถามคือ: {user_input}"
-
-    try:
+        
+        # ✅ เรียกใช้โมเดล gemini-2.5-flash ตามคำสั่ง
         res = requests.post(
             f"{AI_BASE_URL}/chat/completions", 
             headers={"Authorization": f"Bearer {AI_API_KEY}"}, 
@@ -269,30 +332,37 @@ def ask_ai():
         
         if res.status_code == 200:
             reply = res.json()['choices'][0]['message']['content']
+            return jsonify({"reply": reply})
         else:
-            reply = f"AI ตอบกลับไม่ได้ (Error: {res.status_code})"
-            print(f"AI API Log: {res.text}") 
-
-        return jsonify({"reply": reply})
+            return jsonify({"reply": f"AI ตอบกลับไม่ได้ (Error: {res.status_code})"})
 
     except Exception as e:
         return jsonify({"reply": f"การเชื่อมต่อผิดพลาด: {str(e)}"}), 500
 
-# --- 8. PAGE NAVIGATION ---
+# ---------------------------------------------------------
+# 8. PAGE NAVIGATION
+# ---------------------------------------------------------
+
 @app.route('/chatbot')
 @login_required
-def chatbot_page(): return render_template('chatbot.html') 
-
-@app.route('/setting_page')
-@login_required
-def setting_page(): return render_template('setting.html')
+def chatbot_page():
+    return render_template('chatbot.html') 
 
 @app.route('/student_list')
 @login_required
 def student_list_page():
-    # ✅ ดึงข้อมูลมาแสดงที่หน้าจอ
+    # ✅ ดึงข้อมูลมาแสดงที่หน้าจอรายชื่อนักเรียน
     students = list(mongo.db.students.find())
     return render_template('student_list.html', students=students)
+
+@app.route('/setting_page')
+@login_required
+def setting_page():
+    return render_template('setting.html')
+
+# ---------------------------------------------------------
+# START APPLICATION
+# ---------------------------------------------------------
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=8000)
