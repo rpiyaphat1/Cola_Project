@@ -56,24 +56,32 @@ def login_page(): return render_template('login.html')
 @app.route('/login', methods=['POST'])
 def login():
     u = request.form.get('username', '').strip()
-    p = request.form.get('password', '').strip()
+    p = request.form.get('password', '') # ❌ ไม่ต้อง .strip() ที่รหัสผ่านเพื่อให้ได้ค่าจริง
+    
     try:
-        # ✅ ใช้ Regex เพื่อให้เจอ "Admin" ใน DB แม้พี่จะพิมพ์ตัวเล็กหรือตัวใหญ่ก็ตาม
+        # ✅ ค้นหา Username แบบ Case-insensitive
         user = mongo.db.users.find_one({"username": re.compile(f'^{u}$', re.IGNORECASE)})
         
         if user:
-            db_pass = str(user.get('password')).strip()
-            # ✅ เทียบรหัสผ่านตรงตัว (Plain Text) ตามที่พี่ต้องการ
-            if db_pass == p:
-                session.update({
-                    'username': user.get('username'), # เก็บชื่อสะกดจริงจาก DB
-                    'displayname': user.get('displayname', u), 
-                    'permission': user.get('permission', 'User')
-                })
-                # แยกทางตามสิทธิ์ไปหน้าต่างๆ
-                if user.get('permission') in ['Admin', 'Super Admin']:
-                    return redirect(url_for('admin_dashboard'))
-                return redirect(url_for('chatbot_page'))
+            # ✅ ดึงค่า Password จาก DB มาตรวจสอบก่อนว่าเป็น None ไหม
+            raw_db_pass = user.get('password')
+            
+            if raw_db_pass is not None:
+                # ✅ แปลงเป็น String แค่ตัวข้อมูลข้างในจริงๆ
+                db_pass = str(raw_db_pass)
+                
+                # ✅ เทียบรหัสผ่านแบบตรงตัว (Case-sensitive สำหรับรหัสผ่าน)
+                if db_pass == p:
+                    session.update({
+                        'username': user.get('username'),
+                        'displayname': user.get('displayname', u),
+                        'permission': user.get('permission', 'User')
+                    })
+                    
+                    if user.get('permission') in ['Admin', 'Super Admin']:
+                        return redirect(url_for('admin_dashboard'))
+                    return redirect(url_for('chatbot_page'))
+                    
     except Exception as e:
         print(f"Login Error: {str(e)}")
         
