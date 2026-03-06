@@ -22,6 +22,7 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_2026_final_stable_
 app.config["MONGO_URI"] = os.environ.get('MY_DB_URL')
 mongo = PyMongo(app)
 
+# ✅ ดึงค่าจาก Environment Variables ของ Vercel
 AI_API_KEY = os.environ.get('AI_API_KEY')
 AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 SAVE_CHAT_ENABLED = False
@@ -37,7 +38,6 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # ✅ รองรับทั้ง Admin และ Super Admin
         allowed_roles = ['Admin', 'Super Admin']
         if session.get('permission') not in allowed_roles:
             flash('เฉพาะผู้ดูแลระบบเท่านั้น!', 'error')
@@ -51,32 +51,26 @@ def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static'),
                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
-# --- 4. AUTH SYSTEM (Login & Register - แบบรหัสผ่านตรงตัว) ---
+# --- 4. AUTH SYSTEM ---
 @app.route('/')
 def login_page(): return render_template('login.html')
 
 @app.route('/login', methods=['POST'])
 def login():
     u = request.form.get('username', '').strip()
-    p = request.form.get('password', '') # รับค่ารหัสผ่านดิบๆ
+    p = request.form.get('password', '') 
     
     try:
         user = mongo.db.users.find_one({"username": re.compile(f'^{u}$', re.IGNORECASE)})
         
         if user:
             db_pass = user.get('password')
-            
-            print(f"--- DEBUG LOGIN ---")
-            print(f"What you typed: '{p}'")
-            print(f"What's in DB:   '{db_pass}'")
-            print(f"Are they equal?: {str(db_pass) == str(p)}")
-            print(f"-------------------")
-
+            # ✅ เทียบรหัสผ่านแบบตรงตัว (Case-sensitive)
             if db_pass is not None and str(db_pass) == str(p):
                 session.update({
                     'username': user.get('username'),
                     'displayname': user.get('displayname', u),
-                    'permission': user.get('permission', 'User') # รองรับสิทธิ์ Super Admin
+                    'permission': user.get('permission', 'User')
                 })
                 dest = 'admin_dashboard' if user.get('permission') in ['Admin', 'Super Admin'] else 'chatbot_page'
                 return redirect(url_for(dest))
@@ -132,7 +126,7 @@ def admin_dashboard():
 def admin_import_page():
     return render_template('admin_import.html')
 
-# --- 2. API สำหรับอัปโหลดไฟล์ Excel/CSV (จากปุ่ม startUpload) ---
+# --- 5. IMPORT SYSTEM (แก้ไขเรื่องหัวคอลัมน์ภาษาไทย) ---
 @app.route('/api/import_excel', methods=['POST'])
 @login_required
 @admin_required
@@ -155,12 +149,19 @@ def import_excel():
         else:
             return jsonify({"success": False, "error": "รองรับเฉพาะ .xlsx และ .csv เท่านั้นครับ"}), 400
 
+        # ✅ เปลี่ยนชื่อหัวคอลัมน์จากภาษาไทยเป็นอังกฤษให้ตรงกับหน้าจอ
+        # 'ที่' ไม่ต้องเอาลง DB เพื่อความสะอาด
+        mapping = {
+            'ชื่อ-นามสกุล': 'fullname',
+            'ชั้น': 'grade'
+        }
+        df = df.rename(columns=mapping)
+
         # ล้างค่าว่างให้ MongoDB อ่านออก
         df = df.where(pd.notnull(df), None)
         data = df.to_dict(orient='records')
 
         if data:
-            # ✨ บันทึกลง Collection 'students' ทันที
             mongo.db.students.insert_many(data)
             return jsonify({"success": True, "message": f"นำเข้าข้อมูลสำเร็จ {len(data)} รายการแล้วครับ!"})
         
@@ -170,7 +171,6 @@ def import_excel():
         print(f"Excel Import Error: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
 
-# --- 3. API สำหรับบันทึกรายคน (จากปุ่ม saveStudent) ---
 @app.route('/api/add_student', methods=['POST'])
 @login_required
 @admin_required
@@ -180,26 +180,24 @@ def add_student():
         if not data.get('fullname') or not data.get('grade'):
             return jsonify({"success": False, "message": "กรุณาระบุชื่อและชั้นเรียนด้วยครับ"}), 400
             
-        # บันทึกลง MongoDB
         mongo.db.students.insert_one({
             "nickname": data.get('nickname'),
             "fullname": data.get('fullname'),
             "grade": data.get('grade'),
             "disability_type": data.get('disability_type'),
             "technique": data.get('technique'),
-            "timestamp": ObjectId() # เก็บเวลาสร้างไว้หน่อย
+            "timestamp": ObjectId()
         })
         return jsonify({"success": True, "message": "บันทึกข้อมูลนักเรียนสำเร็จครับ!"})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-# --- 6. USER & ACCESS MANAGEMENT (ฟังก์ชันจัดการผู้ใช้ - ห้ามลบ) ---
+# --- 6. USER & ACCESS MANAGEMENT ---
 @app.route('/update_user/<username>', methods=['POST'])
 @login_required
 @admin_required
 def update_user(username):
     data = request.json
-    # ห้ามเปลี่ยนสิทธิ์ตัวเองหรือ admin หลัก
     if username.lower() == 'admin' or username == session.get('username'):
         perm = mongo.db.users.find_one({"username": username}).get('permission')
     else: perm = data.get('permission')
@@ -210,7 +208,6 @@ def update_user(username):
 @login_required
 @admin_required
 def delete_user(username):
-    # ป้องกันการลบตัวเองหรือ admin หลัก
     if username.lower() != 'admin' and username != session.get('username'):
         mongo.db.users.delete_one({"username": username})
         mongo.db.user_access.delete_many({"username": username})
@@ -253,22 +250,20 @@ def ask_ai():
     username = session.get('username')
     permission = session.get('permission')
     
-    # 1. ลองดึงข้อมูลนักเรียน (ถ้ามี)
     try:
-        students = list(mongo.db.students.find().limit(20))
+        # ดึงรายชื่อนักเรียนมาเป็น Context (จำกัดเพื่อไม่ให้ Token เต็ม)
+        students = list(mongo.db.students.find().limit(50))
     except:
         students = []
 
-    # 2. สร้าง Context (ถ้าไม่มีนักเรียน ก็ให้เป็นค่าว่างไป)
     if students:
         ctx = "\n".join([f"- {s.get('fullname')} ({s.get('grade')})" for s in students])
-        prompt = f"ข้อมูลนักเรียนที่มีในระบบ:\n{ctx}\n\nคำถามจากผู้ใช้: {user_input}"
+        prompt = f"ข้อมูลนักเรียนในระบบ:\n{ctx}\n\nคำถาม: {user_input}"
     else:
-        # 💡 ถ้าไม่มีข้อมูลนักเรียน ให้ AI ตอบแบบทั่วไปเพื่อทดสอบการเชื่อมต่อ
-        prompt = f"ระบบกำลังอยู่ในโหมดทดสอบ (ยังไม่มีข้อมูลนักเรียนใน DB)\nคำถามคือ: {user_input}"
+        prompt = f"ระบบกำลังทดสอบ (ยังไม่มีข้อมูลใน DB)\nคำถามคือ: {user_input}"
 
     try:
-        # 3. ยิงไปหา AI API (ใช้ Key จาก Vercel Settings)
+        # ✅ เรียกใช้ Key จาก Vercel (ต้อง Redeploy เพื่อให้ค่าอัปเดต)
         res = requests.post(
             f"{AI_BASE_URL}/chat/completions", 
             headers={"Authorization": f"Bearer {AI_API_KEY}"}, 
@@ -282,8 +277,9 @@ def ask_ai():
         if res.status_code == 200:
             reply = res.json()['choices'][0]['message']['content']
         else:
+            # 401 แก้โดยการ Redeploy ใน Vercel
             reply = f"AI ตอบกลับไม่ได้ (Error: {res.status_code})"
-            print(f"AI API Log: {res.text}") # ดูใน Vercel Runtime Logs
+            print(f"AI API Log: {res.text}") 
 
         return jsonify({"reply": reply})
 
@@ -304,5 +300,4 @@ def setting_page(): return render_template('setting.html')
 def student_list_page(): return render_template('student_list.html')
 
 if __name__ == "__main__":
-    # รันบนเครื่องตัวเองที่ Port 8000
     app.run(debug=True, host='0.0.0.0', port=8000)
