@@ -6,8 +6,6 @@ from functools import wraps
 from flask import Flask, render_template, request, jsonify, url_for, redirect, session, flash, send_from_directory
 from flask_pymongo import PyMongo
 from bson.objectid import ObjectId
-# 🔒 ระบบ Security สำหรับ Hash รหัสผ่าน
-from werkzeug.security import generate_password_hash, check_password_hash
 
 try:
     from dotenv import load_dotenv
@@ -16,7 +14,7 @@ except ImportError:
     pass
 
 app = Flask(__name__) 
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_2026_super_secure_final')
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_2026_final_no_hash')
 
 # --- 1. Database Config ---
 app.config["MONGO_URI"] = os.environ.get('MY_DB_URL')
@@ -26,7 +24,7 @@ AI_API_KEY = os.environ.get('AI_API_KEY')
 AI_BASE_URL = "https://gen.ai.kku.ac.th/api/v1"
 SAVE_CHAT_ENABLED = False
 
-# --- 2. Middleware ---
+# --- 2. Middleware (ตรวจสอบสิทธิ์) ---
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -37,9 +35,9 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # ✅ รองรับทั้ง Admin และ Super Admin ตามข้อมูลใน DB พี่
-        allowed = ['Admin', 'Super Admin']
-        if session.get('permission') not in allowed:
+        # ✅ รองรับทั้ง Admin และ Super Admin ตามที่พี่มีใน DB
+        allowed_roles = ['Admin', 'Super Admin']
+        if session.get('permission') not in allowed_roles:
             flash('เฉพาะผู้ดูแลระบบเท่านั้น!', 'error')
             return redirect(url_for('chatbot_page'))
         return f(*args, **kwargs)
@@ -51,35 +49,34 @@ def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static'),
                                'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
-# --- 4. AUTH SYSTEM (Login & Register + Hash) ---
+# --- 4. AUTH SYSTEM (Login & Register - แบบรหัสผ่านตรงตัว) ---
 @app.route('/')
 def login_page(): return render_template('login.html')
 
 @app.route('/login', methods=['POST'])
 def login():
-    # รับค่าแบบตรงตัวและตัดช่องว่าง
     u = request.form.get('username', '').strip()
     p = request.form.get('password', '').strip()
     try:
-        # ✅ แก้ให้หา "Admin" เจอแน่นอนด้วย Regex (Ignore Case)
+        # ✅ ใช้ Regex เพื่อให้เจอ "Admin" ใน DB แม้พิมพ์ "admin"
         user = mongo.db.users.find_one({"username": re.compile(f'^{u}$', re.IGNORECASE)})
+        
         if user:
             db_pass = str(user.get('password')).strip()
-            # 🔒 ตรวจสอบรหัสผ่าน: รองรับทั้ง Hash และแบบเดิม
-            is_valid = check_password_hash(db_pass, p) if db_pass.startswith('pbkdf2:sha256') else (db_pass == p)
-            
-            if is_valid:
+            # ✅ เทียบรหัสผ่านตรงตัว (Plain Text) ตามที่พี่ต้องการ
+            if db_pass == p:
                 session.update({
-                    'username': user.get('username'), # ดึงชื่อจริงๆ จาก DB
+                    'username': user.get('username'), 
                     'displayname': user.get('displayname', u), 
                     'permission': user.get('permission', 'User')
                 })
-                # แยกทางตามสิทธิ์ Admin/Super Admin ไป Dashboard
+                # แยกทางตามสิทธิ์ไปหน้าต่างๆ
                 if user.get('permission') in ['Admin', 'Super Admin']:
                     return redirect(url_for('admin_dashboard'))
                 return redirect(url_for('chatbot_page'))
     except Exception as e:
         print(f"Login Error: {str(e)}")
+        
     flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'error')
     return redirect(url_for('login_page'))
 
@@ -96,10 +93,9 @@ def register_page():
         if mongo.db.users.find_one({"username": re.compile(f'^{u}$', re.IGNORECASE)}):
             flash('มีชื่อผู้ใช้นี้ในระบบแล้ว', 'error')
         else:
-            # 🔒 บันทึกแบบ Hash ทันที
             mongo.db.users.insert_one({
                 "username": u,
-                "password": generate_password_hash(p),
+                "password": p, # บันทึกแบบธรรมดา
                 "displayname": d,
                 "permission": perm
             })
@@ -137,19 +133,18 @@ def import_students():
     try:
         data = request.json
         if not data or not isinstance(data, list):
-            return jsonify({"success": False, "message": "ข้อมูลไม่ถูกต้อง"}), 400
+            return jsonify({"success": False, "message": "Invalid format"}), 400
         mongo.db.students.insert_many(data)
         return jsonify({"success": True, "count": len(data)})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-# --- 6. USER & ACCESS MANAGEMENT (ห้ามลบเด็ดขาด) ---
+# --- 6. USER & ACCESS MANAGEMENT (ฟังก์ชันจัดการผู้ใช้ - ห้ามลบ) ---
 @app.route('/update_user/<username>', methods=['POST'])
 @login_required
 @admin_required
 def update_user(username):
     data = request.json
-    # ล็อคไม่ให้เปลี่ยนสิทธิ์ตัวเองหรือ admin หลัก
     if username.lower() == 'admin' or username == session['username']:
         perm = mongo.db.users.find_one({"username": username}).get('permission')
     else: perm = data.get('permission')
@@ -164,7 +159,7 @@ def delete_user(username):
         mongo.db.users.delete_one({"username": username})
         mongo.db.user_access.delete_many({"username": username})
         return jsonify({"success": True})
-    return jsonify({"success": False, "message": "ไม่สามารถลบผู้ดูแลระบบได้"})
+    return jsonify({"success": False})
 
 @app.route('/api/get_user_access/<username>')
 @login_required
@@ -227,15 +222,7 @@ def ask_ai():
         return jsonify({"reply": reply})
     except Exception as e: return jsonify({"reply": f"Error: {str(e)}"}), 500
 
-@app.route('/api/toggle_chat_save', methods=['POST'])
-@login_required
-@admin_required
-def toggle_chat_save():
-    global SAVE_CHAT_ENABLED
-    SAVE_CHAT_ENABLED = request.json.get('enabled', False)
-    return jsonify({"success": True, "enabled": SAVE_CHAT_ENABLED})
-
-# --- 8. PAGE NAVIGATION (ห้ามลบ endpoint) ---
+# --- 8. PAGE NAVIGATION ---
 @app.route('/chatbot')
 @login_required
 def chatbot_page(): return render_template('chatbot.html') 
