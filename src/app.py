@@ -20,7 +20,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'piyaphat_2026_final_stable_version')
 
 # --- 1. Database Config ---
-# ✅ ตรวจสอบค่า MY_DB_URL ใน Vercel ให้ลงท้ายด้วย /IEPAssistant เสมอครับ
+# ✅ แอปจะดึงค่าจาก MY_DB_URL ใน Vercel (ต้องระบุชื่อ DB ต่อท้าย เช่น /IEP)
 app.config["MONGO_URI"] = os.environ.get('MY_DB_URL')
 mongo = PyMongo(app)
 
@@ -108,6 +108,7 @@ def register_page():
 @app.route('/logout')
 def logout(): session.clear(); return redirect(url_for('login_page'))
 
+# --- 5. DASHBOARD & USER MANAGEMENT ---
 @app.route('/admin_dashboard')
 @login_required
 @admin_required
@@ -121,13 +122,62 @@ def admin_dashboard():
     except Exception as e:
         return render_template('admin_dashboard.html', users=[], all_students=[], all_grades=[], error=str(e))
 
+@app.route('/update_user/<username>', methods=['POST'])
+@login_required
+@admin_required
+def update_user(username):
+    data = request.json
+    if username.lower() == 'admin' or username == session.get('username'):
+        perm = mongo.db.users.find_one({"username": username}).get('permission')
+    else: perm = data.get('permission')
+    mongo.db.users.update_one({"username": username}, {"$set": {"displayname": data.get('displayname'), "permission": perm}})
+    return jsonify({"success": True})
+
+@app.route('/delete_user/<username>', methods=['POST'])
+@login_required
+@admin_required
+def delete_user(username):
+    if username.lower() != 'admin' and username != session.get('username'):
+        mongo.db.users.delete_one({"username": username})
+        mongo.db.user_access.delete_many({"username": username})
+        return jsonify({"success": True})
+    return jsonify({"success": False, "message": "ไม่สามารถลบผู้ดูแลระบบหลักได้"})
+
+@app.route('/api/get_user_access/<username>')
+@login_required
+@admin_required
+def get_user_access(username):
+    accs = list(mongo.db.user_access.find({"username": username}))
+    for a in accs: a['id'] = str(a['_id'])
+    return jsonify({"access": accs})
+
+@app.route('/api/grant_access', methods=['POST'])
+@login_required
+@admin_required
+def grant_access():
+    data = request.json
+    std_id = data.get('student_id')
+    mongo.db.user_access.insert_one({
+        "username": data.get('username'), 
+        "accessible_grade": data.get('grade'), 
+        "accessible_student_id": int(std_id) if std_id else None
+    })
+    return jsonify({"success": True})
+
+@app.route('/api/revoke_access/<access_id>', methods=['POST'])
+@login_required
+@admin_required
+def revoke_access(access_id):
+    mongo.db.user_access.delete_one({"_id": ObjectId(access_id)})
+    return jsonify({"success": True})
+
+# --- 6. IMPORT SYSTEM & STUDENT MANAGEMENT ---
 @app.route('/admin_import')
 @login_required
 @admin_required
 def admin_import_page():
     return render_template('admin_import.html')
 
-# --- 5. IMPORT SYSTEM ---
 @app.route('/api/import_excel', methods=['POST'])
 @login_required
 @admin_required
@@ -189,56 +239,6 @@ def add_student():
         return jsonify({"success": True, "message": "บันทึกข้อมูลนักเรียนสำเร็จครับ!"})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
-
-# --- 6. USER & ACCESS MANAGEMENT ---
-@app.route('/update_user/<username>', methods=['POST'])
-@login_required
-@admin_required
-def update_user(username):
-    data = request.json
-    if username.lower() == 'admin' or username == session.get('username'):
-        perm = mongo.db.users.find_one({"username": username}).get('permission')
-    else: perm = data.get('permission')
-    mongo.db.users.update_one({"username": username}, {"$set": {"displayname": data.get('displayname'), "permission": perm}})
-    return jsonify({"success": True})
-
-@app.route('/delete_user/<username>', methods=['POST'])
-@login_required
-@admin_required
-def delete_user(username):
-    if username.lower() != 'admin' and username != session.get('username'):
-        mongo.db.users.delete_one({"username": username})
-        mongo.db.user_access.delete_many({"username": username})
-        return jsonify({"success": True})
-    return jsonify({"success": False, "message": "ไม่สามารถลบผู้ดูแลระบบหลักได้"})
-
-@app.route('/api/get_user_access/<username>')
-@login_required
-@admin_required
-def get_user_access(username):
-    accs = list(mongo.db.user_access.find({"username": username}))
-    for a in accs: a['id'] = str(a['_id'])
-    return jsonify({"access": accs})
-
-@app.route('/api/grant_access', methods=['POST'])
-@login_required
-@admin_required
-def grant_access():
-    data = request.json
-    std_id = data.get('student_id')
-    mongo.db.user_access.insert_one({
-        "username": data.get('username'), 
-        "accessible_grade": data.get('grade'), 
-        "accessible_student_id": int(std_id) if std_id else None
-    })
-    return jsonify({"success": True})
-
-@app.route('/api/revoke_access/<access_id>', methods=['POST'])
-@login_required
-@admin_required
-def revoke_access(access_id):
-    mongo.db.user_access.delete_one({"_id": ObjectId(access_id)})
-    return jsonify({"success": True})
 
 # --- 7. AI CHAT ---
 @app.route('/ask_ai', methods=['POST'])
