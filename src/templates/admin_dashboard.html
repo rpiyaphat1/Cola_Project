@@ -245,31 +245,30 @@
                     data.access.sort((a, b) => (a.grade || "ZZZ").localeCompare(b.grade || "ZZZ", 'th'));
                     let html = '';
                     data.access.forEach(acc => {
-                        // ✅ 1. เช็คประเภทสิทธิ์ (รายห้อง หรือ รายคน)
-                        // ใช้ accessible_grade เพื่อแยกแยะ
+                        // เช็คประเภทสิทธิ์ (รายห้อง หรือ รายคน)
                         let header = acc.accessible_grade ? `🏫 ชั้นเรียน: ${acc.accessible_grade}` : "👶 นักเรียนในปกครอง";
                         let displayNames = [];
 
                         if (acc.accessible_grade) {
-                            // กรณีรายห้อง: ไปดึงชื่อเด็กทุกคนในห้องนั้นจาก Select Options มาแสดง
+                            // กรณีรายห้อง: ดึงชื่อเด็กทุกคนในห้องนั้นมาแสดง
                             displayNames = studentOptions
                                 .filter(o => o.getAttribute('data-grade') === acc.accessible_grade)
                                 .map(o => o.text.split(' (')[0]);
                         } else {
-                            // ✅ 2. กรณีรายคน: ดึงชื่อจากฟิลด์ accessible_student_name มาแสดงตรงๆ เลย
-                            // ไม่ต้องใช้ sId ไปหาใน studentOptions.find อีกต่อไป
+                            // กรณีรายคน: ดึงชื่อจากฟิลด์ใหม่ (accessible_student_name) มาแสดงโดยตรง
                             const stdName = acc.accessible_student_name || "ไม่พบชื่อนักเรียน";
                             displayNames = [stdName];
                         }
 
-                        // ✅ 3. สร้าง HTML (เพิ่มการแยกสีให้ดูง่าย: รายห้องสีน้ำเงิน / รายคนสีเขียว)
                         const colorClass = acc.accessible_grade ? 'text-indigo-500' : 'text-emerald-500';
+                        // ควบคุมการแสดง Checkbox ลบ
+                        const isEditClass = isAccessEditMode[username] ? '' : 'hidden';
 
                         html += `
                             <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm relative mb-2">
                                 <div class="flex items-center mb-2 border-b border-slate-50 pb-1 ${colorClass} font-bold">
-                                    <input type="checkbox" value="${acc.id}" data-type="group" onchange="updateBulkBtn('${username}')" 
-                                        class="access-cb-${username} hidden rounded border-slate-300 custom-cb mr-2">
+                                    <input type="checkbox" value="${acc.id}" onchange="updateBulkBtn('${username}')" 
+                                        class="access-cb-${username} ${isEditClass} rounded border-slate-300 custom-cb mr-2">
                                     <span class="text-[9px] uppercase tracking-tighter">${header}</span>
                                 </div>
                                 <div class="flex flex-wrap gap-1.5 opacity-90">
@@ -282,9 +281,6 @@
                             </div>`;
                     });
                     container.innerHTML = html;
-                    if (isAccessEditMode[username]) {
-                        document.querySelectorAll(`.access-cb-${username}, .student-cb-${username}`).forEach(cb => cb.classList.remove('hidden'));
-                    }
                 } else { container.innerHTML = '<span class="text-[10px] text-slate-300 italic">ยังไม่มีสิทธิ์</span>'; }
             } catch (err) { console.error(err); }
         }
@@ -298,10 +294,9 @@
             const payload = { username: username };
 
             if (type === 'grade') {
-                payload.grade = selectedOption.value; // ส่งชื่อห้อง เช่น ป.1/1
+                payload.grade = selectedOption.value;
             } else {
-                // ✅ แทนที่จะส่ง ID เป็นตัวเลข ให้ส่ง Fullname (Text) ไปแทน
-                // โดยตัดคำว่า " (ป.x/x)" ออกจากตัวเลือกใน Select
+                // ส่งชื่อนักเรียนเต็มไปบันทึก
                 payload.student_fullname = selectedOption.text.split(' (')[0];
             }
 
@@ -315,10 +310,29 @@
                 if (result.success) {
                     document.getElementById(`${type}-search-${username}`).value = '';
                     select.classList.add('hidden');
-                    loadAccess(username); // รีโหลดรายการสิทธิ์เพื่อโชว์ที่เพิ่งเพิ่ม
+                    loadAccess(username);
                 }
             } catch (e) {
                 console.error("Grant Access Error:", e);
+            }
+        }
+
+        async function bulkRevoke(username) {
+            const checkedBoxes = document.querySelectorAll(`.access-cb-${username}:checked`);
+            const ids = Array.from(checkedBoxes).map(cb => cb.value);
+
+            if (ids.length === 0) return;
+            if (!confirm(`ยืนยันการลบสิทธิ์ที่เลือกจำนวน ${ids.length} รายการ?`)) return;
+
+            try {
+                for (const id of ids) {
+                    await fetch(`/api/revoke_access/${id}`, { method: 'POST' });
+                }
+                alert('ลบสิทธิ์เรียบร้อยแล้ว');
+                isAccessEditMode[username] = false;
+                loadAccess(username);
+            } catch (err) {
+                alert('เกิดข้อผิดพลาดในการลบสิทธิ์');
             }
         }
 
@@ -336,11 +350,21 @@
             alert('บันทึกสำเร็จ!'); location.reload();
         }
 
+        async function deleteUser(username) {
+            if (!confirm(`ยืนยันการลบผู้ใช้ ${username}? สิทธิ์ทั้งหมดจะหายไปด้วย`)) return;
+            try {
+                const res = await fetch(`/delete_user/${username}`, { method: 'POST' });
+                const result = await res.json();
+                if (result.success) location.reload();
+                else alert(result.message);
+            } catch (e) { }
+        }
+
         function toggleEditMode() { document.querySelectorAll('.view-mode, .edit-mode').forEach(el => el.classList.toggle('hidden')); document.getElementById('save-all-btn').classList.toggle('hidden'); }
         function toggleUserCard(u) { const c = document.getElementById(`content-${u}`); const i = document.getElementById(`icon-${u}`); if (c.classList.contains('hidden')) { c.classList.remove('hidden'); i.style.transform = 'rotate(180deg)'; loadAccess(u); } else { c.classList.add('hidden'); i.style.transform = 'rotate(0deg)'; } }
         function toggleAccessEdit(u) { isAccessEditMode[u] = !isAccessEditMode[u]; loadAccess(u); }
         function updateBulkBtn(u) {
-            const total = document.querySelectorAll(`.access-cb-${u}:checked, .student-cb-${u}:checked`).length;
+            const total = document.querySelectorAll(`.access-cb-${u}:checked`).length;
             const btn = document.getElementById(`bulk-revoke-btn-${u}`);
             if (total > 0) { btn.classList.remove('hidden'); btn.innerText = `🗑️ ยืนยันลบสิทธิ์ (${total})`; }
             else btn.classList.add('hidden');
@@ -357,13 +381,13 @@
             s.classList.toggle('hidden', !has);
         }
         window.onclick = function (e) { if (!e.target.closest('.searchable-container')) document.querySelectorAll('.search-select').forEach(el => el.classList.add('hidden')); if (!e.target.closest('.relative')) document.getElementById('user-menu').classList.add('hidden'); };
+
         document.addEventListener('change', function (e) {
             if (e.target.classList.contains('search-select')) {
                 const t = e.target.id.includes('student') ? 'student' : 'grade';
                 const u = e.target.id.replace(`${t}-select-`, '');
                 document.getElementById(`${t}-search-${u}`).value = e.target.options[e.target.selectedIndex].text;
                 e.target.classList.add('hidden');
-                e.target.value = e.target.options[e.target.selectedIndex].value;
             }
         });
     </script>
