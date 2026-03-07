@@ -495,7 +495,7 @@ def chatbot_page():
 @app.route('/student_list')
 @login_required
 def student_list_page():
-    """ หน้าแสดงรายชื่อนักเรียน: กรองตามสิทธิ์ และแปลง ID กันพัง """
+    """ หน้าแสดงรายชื่อนักเรียน: กรองตามสิทธิ์ และแปลง ID ให้สะอาด 100% """
     username = session.get('username')
     permission = session.get('permission')
     
@@ -508,9 +508,10 @@ def student_list_page():
         query = {"$or": [{"grade": {"$in": allowed_grades}}, {"fullname": {"$in": allowed_names}}]}
         students = list(mongo.db.students.find(query).sort("fullname", 1))
         
-    # ✅ แปลง ObjectId เป็น String ป้องกัน Error 500 ตอนทำ tojson
+    # ✅ แก้ไขตรงนี้: แปลง ID และ "ลบ" _id เดิมทิ้ง เพื่อกัน jsonify/tojson พัง
     for s in students:
-        s['_id'] = str(s['_id'])
+        s['id_str'] = str(s['_id']) # สร้าง id ใหม่ที่เป็น string
+        del s['_id']               # ลบตัวที่เป็น ObjectId ทิ้งไปเลย
         
     return render_template('student_list.html', students=students)
 
