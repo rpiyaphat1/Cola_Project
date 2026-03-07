@@ -157,6 +157,7 @@
     <script>
         // ✅ JS รับข้อมูลแบบปลอดภัย และหลอก VS Code ให้หายแดง
         const userPerm = "{{ session['permission'] }}";
+        // ✅ ใช้ JSON.parse ร่วมกับ safe และใส่เครื่องหมาย ' ' ครอบไว้
         // @ts-ignore
         const allStudents = JSON.parse('{{ students | tojson | safe }}');
 

@@ -491,27 +491,32 @@ def ask_ai():
 def chatbot_page():
     """ หน้าสำหรับใช้งาน AI Chatbot """
     return render_template('chatbot.html') 
-
+    
 @app.route('/student_list')
 @login_required
 def student_list_page():
-    """ หน้าแสดงรายชื่อนักเรียน: กรองตามสิทธิ์ และแปลง ID ให้สะอาด 100% """
+    """ หน้าแสดงรายชื่อนักเรียน: กรองตามสิทธิ์ และล้าง ObjectId ทิ้ง 100% """
     username = session.get('username')
     permission = session.get('permission')
     
+    # ดึงข้อมูลตามเงื่อนไขสิทธิ์
     if permission in ['Admin', 'Super Admin']:
         students = list(mongo.db.students.find().sort("fullname", 1))
     else:
         access_list = list(mongo.db.user_access.find({"username": username}))
         allowed_grades = [a.get('accessible_grade') for a in access_list if a.get('accessible_grade')]
         allowed_names = [a.get('accessible_student_name') for a in access_list if a.get('accessible_student_name')]
-        query = {"$or": [{"grade": {"$in": allowed_grades}}, {"fullname": {"$in": allowed_names}}]}
+        
+        query = {"$or": [
+            {"grade": {"$in": allowed_grades}}, 
+            {"fullname": {"$in": allowed_names}}
+        ]}
         students = list(mongo.db.students.find(query).sort("fullname", 1))
         
-    # ✅ แก้ไขตรงนี้: แปลง ID และ "ลบ" _id เดิมทิ้ง เพื่อกัน jsonify/tojson พัง
+    # ✅ ล้างคราบ ObjectId ออกให้เกลี้ยง เพื่อกันหน้า HTML พัง
     for s in students:
-        s['id_str'] = str(s['_id']) # สร้าง id ใหม่ที่เป็น string
-        del s['_id']               # ลบตัวที่เป็น ObjectId ทิ้งไปเลย
+        s['id_str'] = str(s['_id']) 
+        del s['_id']               
         
     return render_template('student_list.html', students=students)
 
