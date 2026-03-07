@@ -245,25 +245,37 @@
                     data.access.sort((a, b) => (a.grade || "ZZZ").localeCompare(b.grade || "ZZZ", 'th'));
                     let html = '';
                     data.access.forEach(acc => {
-                        let header = acc.grade ? `🏫 ชั้นเรียน: ${acc.grade}` : "👶 นักเรียนในปกครอง";
-                        let stds = acc.grade ? studentOptions.filter(o => o.getAttribute('data-grade') === acc.grade) : [];
-                        if (!acc.grade) {
-                            const sId = acc.accessible_student_id || acc.student_id;
-                            const found = studentOptions.find(o => o.value == sId);
-                            if (found) stds = [found];
+                        // ✅ 1. เช็คประเภทสิทธิ์ (รายห้อง หรือ รายคน)
+                        // ใช้ accessible_grade เพื่อแยกแยะ
+                        let header = acc.accessible_grade ? `🏫 ชั้นเรียน: ${acc.accessible_grade}` : "👶 นักเรียนในปกครอง";
+                        let displayNames = [];
+
+                        if (acc.accessible_grade) {
+                            // กรณีรายห้อง: ไปดึงชื่อเด็กทุกคนในห้องนั้นจาก Select Options มาแสดง
+                            displayNames = studentOptions
+                                .filter(o => o.getAttribute('data-grade') === acc.accessible_grade)
+                                .map(o => o.text.split(' (')[0]);
+                        } else {
+                            // ✅ 2. กรณีรายคน: ดึงชื่อจากฟิลด์ accessible_student_name มาแสดงตรงๆ เลย
+                            // ไม่ต้องใช้ sId ไปหาใน studentOptions.find อีกต่อไป
+                            const stdName = acc.accessible_student_name || "ไม่พบชื่อนักเรียน";
+                            displayNames = [stdName];
                         }
+
+                        // ✅ 3. สร้าง HTML (เพิ่มการแยกสีให้ดูง่าย: รายห้องสีน้ำเงิน / รายคนสีเขียว)
+                        const colorClass = acc.accessible_grade ? 'text-indigo-500' : 'text-emerald-500';
 
                         html += `
                             <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm relative mb-2">
-                                <div class="flex items-center mb-2 border-b border-slate-50 pb-1 text-indigo-500 font-bold">
-                                    <input type="checkbox" value="${acc.id}" data-type="group" onchange="updateBulkBtn('${username}')" class="access-cb-${username} hidden rounded border-slate-300 custom-cb mr-2">
+                                <div class="flex items-center mb-2 border-b border-slate-50 pb-1 ${colorClass} font-bold">
+                                    <input type="checkbox" value="${acc.id}" data-type="group" onchange="updateBulkBtn('${username}')" 
+                                        class="access-cb-${username} hidden rounded border-slate-300 custom-cb mr-2">
                                     <span class="text-[9px] uppercase tracking-tighter">${header}</span>
                                 </div>
                                 <div class="flex flex-wrap gap-1.5 opacity-90">
-                                    ${stds.map(opt => `
+                                    ${displayNames.map(name => `
                                         <div class="flex items-center bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 space-x-1">
-                                            <input type="checkbox" data-student-id="${opt.value}" data-access-id="${acc.id}" onchange="updateBulkBtn('${username}')" class="student-cb-${username} hidden w-3 h-3 rounded border-slate-200">
-                                            <span class="text-[9px] text-slate-500 font-medium">${opt.text.split(' (')[0]}</span>
+                                            <span class="text-[9px] text-slate-500 font-medium">${name}</span>
                                         </div>
                                     `).join('')}
                                 </div>
@@ -279,13 +291,19 @@
 
         async function grantAccess(username, type) {
             const select = document.getElementById(`${type}-select-${username}`);
-            const val = select.value;
-            if (!val) return;
+            const selectedOption = select.options[select.selectedIndex];
 
-            // แก้บั๊ก: ส่งค่า student_id เป็น Integer
+            if (!selectedOption) return;
+
             const payload = { username: username };
-            if (type === 'grade') { payload.grade = val; }
-            else { payload.student_id = parseInt(val); }
+
+            if (type === 'grade') {
+                payload.grade = selectedOption.value; // ส่งชื่อห้อง เช่น ป.1/1
+            } else {
+                // ✅ แทนที่จะส่ง ID เป็นตัวเลข ให้ส่ง Fullname (Text) ไปแทน
+                // โดยตัดคำว่า " (ป.x/x)" ออกจากตัวเลือกใน Select
+                payload.student_fullname = selectedOption.text.split(' (')[0];
+            }
 
             try {
                 const res = await fetch('/api/grant_access', {
@@ -293,12 +311,15 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                if ((await res.json()).success) {
+                const result = await res.json();
+                if (result.success) {
                     document.getElementById(`${type}-search-${username}`).value = '';
                     select.classList.add('hidden');
-                    loadAccess(username);
+                    loadAccess(username); // รีโหลดรายการสิทธิ์เพื่อโชว์ที่เพิ่งเพิ่ม
                 }
-            } catch (e) { }
+            } catch (e) {
+                console.error("Grant Access Error:", e);
+            }
         }
 
         async function saveAllChanges() {

@@ -65,10 +65,13 @@
                 <h2 class="text-3xl font-extrabold text-slate-800 uppercase italic">📋 รายชื่อนักเรียน</h2>
                 <p class="text-slate-500 text-sm">จัดการข้อมูลนักเรียนและแผนการสอนเฉพาะบุคคล</p>
             </div>
-            <p
-                class="bg-white px-4 py-2 rounded-2xl shadow-sm text-xs font-bold text-indigo-600 border border-indigo-50">
-                ทั้งหมด {{ students|length }} รายการ
-            </p>
+            {% set total_rooms = students | groupby('grade') | length %}
+            <div class="bg-white px-6 py-3 rounded-2xl shadow-sm border border-indigo-50 text-right">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">สรุปข้อมูลระบบ</p>
+                <p class="text-sm font-bold text-indigo-600">
+                    นักเรียนทั้งหมด {{ students|length }} รายการ | {{ total_rooms }} ห้องเรียน
+                </p>
+            </div>
         </div>
 
         {% if session['permission'] == 'Parent' %}
@@ -99,15 +102,18 @@
             {% set grouped_students = students | groupby('grade') %}
             {% for grade, members in grouped_students %}
             <div onclick="filterByGrade('{{ grade }}')"
-                class="bg-white rounded-[2.5rem] shadow-lg p-8 border border-slate-50 text-center cursor-pointer hover:bg-indigo-900 hover:text-white transition-all group transform hover:-translate-y-2 shadow-indigo-100/50">
-                <div
-                    class="bg-indigo-50 group-hover:bg-indigo-800 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-4 transition-colors">
-                    <span class="text-2xl group-hover:scale-125 transition-transform">🏫</span>
+                class="bg-white rounded-[2.5rem] shadow-lg p-10 border border-slate-50 text-center cursor-pointer hover:bg-indigo-900 hover:text-white transition-all group transform hover:-translate-y-2 shadow-indigo-100/50">
+                <div class="mb-2">
+                    <span
+                        class="text-4xl font-black tracking-tighter text-indigo-600 group-hover:text-white transition-colors">
+                        {{ grade }}
+                    </span>
                 </div>
-                <h3 class="text-xl font-black uppercase tracking-tighter">{{ grade }}</h3>
-                <p
-                    class="text-slate-400 group-hover:text-indigo-200 text-[10px] font-bold mt-1 uppercase tracking-widest">
-                    {{ members|length }} นักเรียน</p>
+                <div class="pt-2 border-t border-slate-50 group-hover:border-indigo-800 transition-colors">
+                    <p
+                        class="text-slate-400 group-hover:text-indigo-200 text-[11px] font-bold uppercase tracking-widest">
+                        {{ members|length }} นักเรียน</p>
+                </div>
             </div>
             {% endfor %}
         </div>
@@ -165,7 +171,7 @@
                 </div>
                 <div>
                     <label class="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Status</label>
-                    <p id="m-disability" class="mt-1 text-sm font-bold text-rose-500"></p>
+                    <p id="m-disability" class="mt-1 text-sm font-bold text-rose-600"></p>
                 </div>
                 <div class="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 space-y-4">
                     <div>

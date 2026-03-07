@@ -228,11 +228,11 @@ def get_user_access(username):
 @login_required
 @admin_required
 def grant_access():
-    """ มอบสิทธิ์การเข้าถึง: รองรับทั้งสิทธิ์รายห้อง และสิทธิ์รายบุคคล """
+    """ มอบสิทธิ์การเข้าถึง: รองรับทั้งสิทธิ์รายห้อง และสิทธิ์รายบุคคล (Parent) """
     data = request.json
     username = data.get('username')
     grade = data.get('grade')
-    # ✅ เปลี่ยนจาก student_id เป็น fullname เพื่อรองรับ Parent
+    # ✅ เปลี่ยนมาดึงค่า fullname แทน id
     student_fullname = data.get('student_fullname') 
     
     mongo.db.user_access.insert_one({
@@ -240,7 +240,7 @@ def grant_access():
         "accessible_grade": grade if grade else None, 
         "accessible_student_name": student_fullname if student_fullname else None
     })
-    return jsonify({"success": True, "message": "มอบสิทธิ์การเข้าถึงเรียบร้อยแล้วครับ"})
+    return jsonify({"success": True, "message": "มอบสิทธิ์การเข้าถึงเรียบร้อยแล้ว!"})
 
 @app.route('/api/revoke_access/<access_id>', methods=['POST'])
 @login_required
