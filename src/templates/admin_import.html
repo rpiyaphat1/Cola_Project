@@ -22,7 +22,6 @@
                         class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'chatbot_page' %}border-b-2 border-white pb-1{% endif %}">
                         Chatbot AI
                     </a>
-
                     <a href="{{ url_for('student_list_page') }}"
                         class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'student_list_page' %}border-b-2 border-white pb-1{% endif %}">
                         รายชื่อนักเรียน
@@ -33,12 +32,10 @@
                         class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'admin_dashboard' %}border-b-2 border-white pb-1{% endif %}">
                         Dashboard
                     </a>
-
                     <a href="{{ url_for('admin_import_page') }}"
                         class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'admin_import_page' %}border-b-2 border-white pb-1{% endif %}">
                         Import
                     </a>
-
                     <a href="{{ url_for('register_page') }}"
                         class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'register_page' %}border-b-2 border-white pb-1{% endif %}">
                         Register
@@ -52,7 +49,6 @@
                     class="bg-indigo-800 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition flex items-center shadow-md">
                     {{ session['displayname'] }} <span class="ml-2 text-[10px]">▼</span>
                 </button>
-
                 <div id="user-menu"
                     class="absolute right-0 w-48 mt-2 py-2 bg-white rounded-xl shadow-xl hidden z-[150] text-slate-700 border border-slate-100">
                     <a href="{{ url_for('setting_page') }}"
@@ -72,8 +68,8 @@
         <div class="bg-white p-10 rounded-3xl shadow-2xl max-w-2xl w-full border border-gray-100">
             <h2 class="text-2xl font-extrabold mb-2 text-gray-800 text-center uppercase italic">📥 นำเข้าไฟล์
                 (Excel/CSV)</h2>
-            <p class="text-gray-400 text-center mb-8 text-sm italic border-b pb-4">
-                อัปโหลดไฟล์ข้อมูลนักเรียนจำนวนมากเข้าสู่ระบบ</p>
+            <p class="text-gray-400 text-center mb-8 text-sm italic border-b pb-4">อัปโหลดไฟล์ข้อมูล 200
+                รายการที่เตรียมไว้</p>
 
             <div class="flex flex-col space-y-4">
                 <div
@@ -88,7 +84,7 @@
                 </div>
                 <button onclick="startUpload()" id="upload-btn" disabled
                     class="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 shadow-lg transform active:scale-95 transition-all opacity-50 cursor-not-allowed uppercase tracking-widest text-sm">
-                    ประมวลผลไฟล์
+                    ประมวลผลและนำเข้าฐานข้อมูล
                 </button>
             </div>
         </div>
@@ -96,39 +92,23 @@
         <div class="bg-white p-10 rounded-3xl shadow-2xl max-w-2xl w-full border border-gray-100">
             <h2 class="text-2xl font-extrabold mb-2 text-gray-800 text-center uppercase italic">👤
                 เพิ่มข้อมูลนักเรียนรายคน</h2>
-            <p class="text-gray-400 text-center mb-8 text-sm italic border-b pb-4">ระบุรายละเอียดนักเรียนรายบุคคล</p>
+            <p class="text-gray-400 text-center mb-8 text-sm italic border-b pb-4">กรอกข้อมูลให้ครบตามหัวข้อไฟล์ Excel
+            </p>
 
             <form id="student-form" class="space-y-5">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label
-                            class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">ชื่อเล่น</label>
-                        <input type="text" id="nickname"
-                            class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 shadow-sm transition-all"
-                            placeholder="ชื่อเล่น">
-                    </div>
-                    <div>
-                        <label
-                            class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">ชื่อจริง-นามสกุล</label>
-                        <input type="text" id="fullname"
-                            class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 shadow-sm transition-all"
-                            placeholder="ชื่อ-นามสกุล" required>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label
                             class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">เลขที่</label>
                         <input type="number" id="student_id"
-                            class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 shadow-sm transition-all"
-                            placeholder="เช่น 1, 2, 3">
+                            class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50 shadow-sm transition-all"
+                            placeholder="เช่น 1">
                     </div>
                     <div>
                         <label
                             class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">ชั้น</label>
                         <select id="grade"
-                            class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 font-bold text-sm shadow-sm cursor-pointer"
+                            class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50 font-bold text-sm shadow-sm cursor-pointer"
                             required>
                             <option value="">เลือกชั้น (ป.1/1 - ป.6/15)</option>
                         </select>
@@ -138,20 +118,34 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label
-                            class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">ประเภทความบกพร่อง</label>
-                        <select id="disability_type"
-                            class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 font-bold text-sm shadow-sm cursor-pointer">
-                            <option value="ปกติ">บุคคลทั่วไป</option>
-                            <option value="บกพร่องทางการเรียนรู้ (LD)">บกพร่องทางการเรียนรู้ (LD)</option>
-                            <option value="ออทิสติก">ออทิสติก</option>
-                        </select>
+                            class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">ชื่อจริง-นามสกุล</label>
+                        <input type="text" id="fullname"
+                            class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50 shadow-sm transition-all"
+                            placeholder="ชื่อ-นามสกุล (ห้ามซ้ำ)" required>
+                    </div>
+                    <div>
+                        <label
+                            class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">ชื่อเล่น</label>
+                        <input type="text" id="nickname"
+                            class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50 shadow-sm transition-all"
+                            placeholder="ชื่อเล่น">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label
+                            class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">วิชาที่บกพร่อง</label>
+                        <input type="text" id="disability_type"
+                            class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50 shadow-sm transition-all"
+                            placeholder="เช่น ภาษาไทย">
                     </div>
                     <div>
                         <label
                             class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">วิชาที่โดดเด่น</label>
                         <input type="text" id="outstanding_subject"
-                            class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 shadow-sm transition-all"
-                            placeholder="เช่น คณิตศาสตร์, พลศึกษา">
+                            class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50 shadow-sm transition-all"
+                            placeholder="เช่น ศิลปะ">
                     </div>
                 </div>
 
@@ -159,17 +153,17 @@
                     <label
                         class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">หมายเหตุ</label>
                     <input type="text" id="note"
-                        class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 shadow-sm transition-all"
+                        class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50 shadow-sm transition-all"
                         placeholder="พฤติกรรมหรือข้อมูลเพิ่มเติม">
                 </div>
 
                 <div>
                     <label
-                        class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">วิธีรับมือ/เทคนิคเฉพาะ
+                        class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">เทคนิคเฉพาะ
                         (สำหรับ AI)</label>
                     <textarea id="technique" rows="3"
-                        class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 shadow-sm transition-all"
-                        placeholder="เทคนิคการสอนเฉพาะบุคคล..."></textarea>
+                        class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 bg-gray-50 shadow-sm transition-all"
+                        placeholder="ระบุเทคนิคเพิ่มเติมให้ Gemini วิเคราะห์..."></textarea>
                 </div>
 
                 <button type="button" onclick="saveStudent()" id="save-btn"
@@ -181,10 +175,10 @@
     </div>
 
     <script>
-        // --- 1. สร้างตัวเลือกชั้นเรียน ป.1/1 - ป.6/15 ---
+        // --- 1. สร้างตัวเลือกชั้นเรียน ป.1/1 - ป.6/15 (ตามที่พี่ต้องการ) ---
         const gradeSelect = document.getElementById('grade');
         for (let p = 1; p <= 6; p++) {
-            for (let room = 1; room <= 15; room++) { // ปรับเป็น 15 ตามแผนข้อมูล 200 คน
+            for (let room = 1; room <= 15; room++) {
                 let opt = document.createElement('option');
                 opt.value = `ป.${p}/${room}`;
                 opt.textContent = `ป.${p}/${room}`;
@@ -192,7 +186,7 @@
             }
         }
 
-        // --- 2. ระบบ Dropdown ---
+        // --- 2. ระบบ Dropdown เมนูผู้ใช้ ---
         function toggleDropdown() {
             const menu = document.getElementById('user-menu');
             menu.classList.toggle('hidden');
@@ -204,7 +198,7 @@
             }
         }
 
-        // --- 3. ระบบไฟล์ ---
+        // --- 3. ระบบจัดการไฟล์นำเข้า ---
         let selectedFile = null;
         function handleFile(files) {
             if (files.length > 0) {
@@ -230,19 +224,20 @@
             } catch (err) { alert('ระบบขัดข้อง'); }
         }
 
-        // --- 4. ระบบบันทึกรายคน ---
+        // --- 4. ระบบบันทึกรายคน (ปรับให้ส่งค่าครบตามฟิลด์ใหม่) ---
         async function saveStudent() {
             const data = {
                 student_id: document.getElementById('student_id').value,
                 nickname: document.getElementById('nickname').value,
-                fullname: document.getElementById('fullname').value,
+                fullname: document.getElementById('fullname').value.trim(),
                 grade: document.getElementById('grade').value,
                 disability_type: document.getElementById('disability_type').value,
                 outstanding_subject: document.getElementById('outstanding_subject').value,
                 note: document.getElementById('note').value,
                 technique: document.getElementById('technique').value
             };
-            if (!data.fullname || !data.grade) return alert('กรุณาระบุชื่อและชั้นเรียน');
+
+            if (!data.fullname || !data.grade) return alert('กรุณาระบุชื่อ-นามสกุล และชั้นเรียน');
 
             try {
                 const res = await fetch('/api/add_student', {
@@ -254,8 +249,10 @@
                 if (result.success) {
                     alert(result.message);
                     document.getElementById('student-form').reset();
+                } else {
+                    alert('บันทึกไม่สำเร็จ: ' + result.message);
                 }
-            } catch (err) { alert('บันทึกไม่สำเร็จ'); }
+            } catch (err) { alert('ระบบขัดข้อง'); }
         }
     </script>
 </body>

@@ -288,11 +288,10 @@ def import_excel():
         }
         df = df.rename(columns=mapping)
 
-        # ✅ 2. รวมข้อมูลสำหรับ AI (technique)
         df['technique'] = (
-            "วิชาที่บกพร่อง: " + df['disability_type'].fillna('-').astype(str) + 
-            " | วิชาที่โดดเด่น: " + df['outstanding_subject'].fillna('-').astype(str) + 
-            " | หมายเหตุ: " + df['note'].fillna('-').astype(str)
+            "วิชาที่บกพร่อง: " + df.get('disability_type', pd.Series(['-']*len(df))).fillna('-').astype(str) + 
+            " | วิชาที่โดดเด่น: " + df.get('outstanding_subject', pd.Series(['-']*len(df))).fillna('-').astype(str) + 
+            " | หมายเหตุ: " + df.get('note', pd.Series(['-']*len(df))).fillna('-').astype(str)
         )
 
         df = df.where(pd.notnull(df), None)
@@ -333,14 +332,13 @@ def import_excel():
 def add_student():
     try:
         data = request.json
-        # ดึงชื่อออกมาแล้วตัดช่องว่างหัว-ท้าย เพื่อความแม่นยำในการเช็คซ้ำ
         fullname = str(data.get('fullname', '')).strip()
         grade = data.get('grade')
 
         if not fullname or not grade:
             return jsonify({"success": False, "message": "กรุณาระบุชื่อและชั้นเรียนด้วยครับ"}), 400
             
-        # ✅ 1. ตรวจสอบว่าชื่อ-นามสกุลนี้ มีอยู่ในฐานข้อมูลแล้วหรือยัง
+        # ✅ 1. ตรวจสอบชื่อซ้ำ (อันนี้พี่ทำดีอยู่แล้ว)
         exists = mongo.db.students.find_one({"fullname": fullname})
         if exists:
             return jsonify({
@@ -348,16 +346,27 @@ def add_student():
                 "message": f"ขออภัย รายชื่อ '{fullname}' มีอยู่ในระบบแล้ว (ชั้น {exists.get('grade')})"
             }), 400
 
-        # ✅ 2. ถ้าไม่ซ้ำ ให้ทำการบันทึก
+        # ✅ 2. มัดรวมข้อมูลสำหรับ AI (เพื่อให้โครงสร้างเหมือนกับตอน Import ไฟล์)
+        # ถ้าช่องไหนว่าง ให้ใส่ '-' แทน เพื่อไม่ให้ AI งง
+        combined_technique = (
+            f"วิชาที่บกพร่อง: {data.get('disability_type') or '-'} | "
+            f"วิชาที่โดดเด่น: {data.get('outstanding_subject') or '-'} | "
+            f"หมายเหตุ: {data.get('note') or '-'}"
+        )
+        # ถ้าครูมีการกรอกในช่อง 'เทคนิคเฉพาะ' มาด้วย ก็เอาไปต่อท้ายครับ
+        if data.get('technique'):
+            combined_technique += f" | เทคนิคเพิ่มเติม: {data.get('technique')}"
+
+        # ✅ 3. บันทึกข้อมูล
         mongo.db.students.insert_one({
-            "student_id": data.get('student_id'), # เลขที่ (รัน 1-5 ตามห้อง)
+            "student_id": data.get('student_id'), 
             "nickname": data.get('nickname'),
             "fullname": fullname,
             "grade": grade,
             "disability_type": data.get('disability_type'),
-            "outstanding_subject": data.get('outstanding_subject'), # วิชาที่โดดเด่น
-            "note": data.get('note'), # หมายเหตุ
-            "technique": data.get('technique'),
+            "outstanding_subject": data.get('outstanding_subject'), 
+            "note": data.get('note'), 
+            "technique": combined_technique, # ใช้ตัวที่เรามัดรวมแล้ว
             "timestamp": ObjectId()
         })
         return jsonify({"success": True, "message": f"บันทึกข้อมูลของ {fullname} สำเร็จครับ!"})
