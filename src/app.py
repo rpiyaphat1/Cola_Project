@@ -495,30 +495,34 @@ def chatbot_page():
 @app.route('/student_list')
 @login_required
 def student_list_page():
-    """ หน้าแสดงรายชื่อนักเรียน: กรองตามสิทธิ์ และล้าง ObjectId ทิ้ง 100% """
     username = session.get('username')
     permission = session.get('permission')
     
-    # ดึงข้อมูลตามเงื่อนไขสิทธิ์
+    # 1. ดึงข้อมูลจาก DB
     if permission in ['Admin', 'Super Admin']:
-        students = list(mongo.db.students.find().sort("fullname", 1))
+        raw_data = list(mongo.db.students.find().sort("fullname", 1))
     else:
         access_list = list(mongo.db.user_access.find({"username": username}))
         allowed_grades = [a.get('accessible_grade') for a in access_list if a.get('accessible_grade')]
         allowed_names = [a.get('accessible_student_name') for a in access_list if a.get('accessible_student_name')]
-        
-        query = {"$or": [
-            {"grade": {"$in": allowed_grades}}, 
-            {"fullname": {"$in": allowed_names}}
-        ]}
-        students = list(mongo.db.students.find(query).sort("fullname", 1))
-        
-    # ✅ ล้างคราบ ObjectId ออกให้เกลี้ยง เพื่อกันหน้า HTML พัง
-    for s in students:
-        s['id_str'] = str(s['_id']) 
-        del s['_id']               
-        
-    return render_template('student_list.html', students=students)
+        query = {"$or": [{"grade": {"$in": allowed_grades}}, {"fullname": {"$in": allowed_names}}]}
+        raw_data = list(mongo.db.students.find(query).sort("fullname", 1))
+
+    # ✅ 2. สร้าง List ใหม่ ห้ามเอา Object จาก MongoDB ไปใช้ตรงๆ
+    clean_list = []
+    for s in raw_data:
+        clean_list.append({
+            "id_str": str(s.get('_id')),
+            "student_id": str(s.get('student_id', '-')),
+            "fullname": str(s.get('fullname', 'ไม่ระบุชื่อ')),
+            "grade": str(s.get('grade', '-')),
+            "disability_type": str(s.get('disability_type', 'ปกติ')),
+            "outstanding_subject": str(s.get('outstanding_subject', '-')),
+            "note": str(s.get('note', ''))
+        })
+
+    # ✅ 3. ส่งตัวแปรที่ "สะอาด" เท่านั้นไปที่ Template
+    return render_template('student_list.html', students=clean_list)
 
 @app.route('/api/update_student_details', methods=['POST'])
 @login_required
