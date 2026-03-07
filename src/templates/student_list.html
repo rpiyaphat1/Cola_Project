@@ -90,9 +90,7 @@
                 <p class="text-rose-500 text-xs font-bold uppercase tracking-wide mb-6">📌 {{ student.disability_type or
                     'บุคคลทั่วไป' }}</p>
                 <button onclick="openModalFromData({{ student | tojson }})"
-                    class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-sm hover:bg-indigo-700 shadow-lg transform active:scale-95 transition-all">
-                    ดูรายละเอียดเชิงลึก
-                </button>
+                    class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-sm hover:bg-indigo-700 shadow-lg transform active:scale-95 transition-all">ดูรายละเอียดเชิงลึก</button>
             </div>
             {% endfor %}
         </div>
@@ -105,9 +103,8 @@
                 class="bg-white rounded-[2.5rem] shadow-lg p-10 border border-slate-50 text-center cursor-pointer hover:bg-indigo-900 hover:text-white transition-all group transform hover:-translate-y-2 shadow-indigo-100/50">
                 <div class="mb-2">
                     <span
-                        class="text-4xl font-black tracking-tighter text-indigo-600 group-hover:text-white transition-colors">
-                        {{ grade }}
-                    </span>
+                        class="text-4xl font-black tracking-tighter text-indigo-600 group-hover:text-white transition-colors">{{
+                        grade }}</span>
                 </div>
                 <div class="pt-2 border-t border-slate-50 group-hover:border-indigo-800 transition-colors">
                     <p
@@ -138,8 +135,7 @@
                                 <th class="px-10 py-6 text-right">แอคชั่น</th>
                             </tr>
                         </thead>
-                        <tbody id="filtered-student-body" class="divide-y divide-slate-50">
-                        </tbody>
+                        <tbody id="filtered-student-body" class="divide-y divide-slate-50"></tbody>
                     </table>
                 </div>
             </div>
@@ -152,12 +148,12 @@
         <div class="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden flex flex-col scale-95 transition-all duration-300"
             id="modal-box">
             <div class="p-8 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
-                <h3 class="text-sm font-black text-indigo-900 uppercase tracking-widest italic">Student Deep Insight
+                <h3 class="text-sm font-black text-indigo-900 uppercase tracking-widest italic">Update Student Insight
                 </h3>
                 <button onclick="closeModal()"
                     class="text-slate-300 hover:text-rose-500 transition text-3xl font-light">&times;</button>
             </div>
-            <div class="p-10 space-y-8">
+            <div class="p-10 space-y-6">
                 <div class="flex justify-between items-start">
                     <div>
                         <label class="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Full
@@ -169,69 +165,64 @@
                         <p id="m-grade" class="text-2xl font-black text-indigo-600 italic"></p>
                     </div>
                 </div>
-                <div>
-                    <label class="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Status</label>
-                    <p id="m-disability" class="mt-1 text-sm font-bold text-rose-600"></p>
-                </div>
-                <div class="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 space-y-4">
+
+                <div class="space-y-4">
+                    <div>
+                        <label
+                            class="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-1 block">ประเภทความบกพร่อง</label>
+                        <input type="text" id="m-disability-input"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-rose-500 outline-none focus:ring-2 focus:ring-rose-200 transition">
+                    </div>
                     <div>
                         <label
                             class="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-1 block">วิชาที่โดดเด่น</label>
-                        <p id="m-outstanding" class="text-slate-700 font-bold text-sm"></p>
+                        <input type="text" id="m-outstanding-input"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold text-indigo-600 outline-none focus:ring-2 focus:ring-indigo-100 transition">
                     </div>
-                    <hr class="border-slate-200/50">
                     <div>
                         <label
-                            class="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-1 block">ปัญหา/หมายเหตุ</label>
-                        <p id="m-note" class="text-slate-600 text-xs italic leading-relaxed"></p>
+                            class="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1 block">ปัญหา/หมายเหตุเพิ่มเติม</label>
+                        <textarea id="m-note-input" rows="3"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-xs italic text-slate-600 outline-none focus:ring-2 focus:ring-slate-100 transition"></textarea>
                     </div>
                 </div>
             </div>
-            <div class="p-8 pt-0">
+            <div class="p-8 pt-0 flex space-x-3">
+                <button onclick="saveStudentUpdate()"
+                    class="flex-1 bg-emerald-500 text-white py-4 rounded-2xl font-bold text-xs hover:bg-emerald-600 shadow-lg transform active:scale-95 transition-all">💾
+                    บันทึกอัปเดต</button>
                 <button onclick="closeModal()"
-                    class="w-full bg-slate-800 text-white py-4 rounded-2xl font-bold text-xs hover:bg-black transition shadow-lg">ปิดข้อมูล</button>
+                    class="flex-1 bg-slate-100 text-slate-500 py-4 rounded-2xl font-bold text-xs hover:bg-slate-200 transition">ยกเลิก</button>
             </div>
         </div>
     </div>
 
     <script>
-        // ข้อมูลจาก Server
         const allStudents = {{ students | tojson }};
 
         function toggleDropdown() { document.getElementById('user-menu').classList.toggle('hidden'); }
 
-        // --- ระบบกรองรายห้อง ---
         function filterByGrade(grade) {
             const container = document.getElementById('student-list-container');
             const grid = document.getElementById('grade-cards-grid');
             const body = document.getElementById('filtered-student-body');
             const title = document.getElementById('display-grade-name');
-
             title.innerText = `Classroom: ${grade}`;
             body.innerHTML = '';
-
             const filtered = allStudents.filter(s => s.grade === grade);
             filtered.sort((a, b) => (a.student_id || 0) - (b.student_id || 0));
-
             filtered.forEach(s => {
                 const row = `
                     <tr class="hover:bg-indigo-50/30 transition group">
                         <td class="px-10 py-6 font-mono text-slate-300 text-xs">${s.student_id || '-'}</td>
                         <td class="px-10 py-6 font-bold text-slate-700">${s.fullname}</td>
-                        <td class="px-10 py-6">
-                            <span class="text-xs font-bold text-rose-400 italic">${s.disability_type || 'ปกติ'}</span>
-                        </td>
+                        <td class="px-10 py-6"><span class="text-xs font-bold text-rose-400 italic">${s.disability_type || 'ปกติ'}</span></td>
                         <td class="px-10 py-6 text-right">
-                            <button onclick='openModalFromData(${JSON.stringify(s)})' 
-                                class="bg-white border border-slate-200 text-slate-600 px-6 py-2 rounded-xl font-black text-[10px] uppercase hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all shadow-sm">
-                                View Detail
-                            </button>
+                            <button onclick='openModalFromData(${JSON.stringify(s)})' class="bg-white border border-slate-200 text-slate-600 px-6 py-2 rounded-xl font-black text-[10px] uppercase hover:bg-indigo-600 hover:text-white transition-all shadow-sm">View & Edit</button>
                         </td>
-                    </tr>
-                `;
+                    </tr>`;
                 body.innerHTML += row;
             });
-
             grid.classList.add('hidden');
             container.classList.remove('hidden');
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -242,19 +233,45 @@
             document.getElementById('grade-cards-grid').classList.remove('hidden');
         }
 
-        // --- ระบบ Modal ---
         function openModalFromData(s) {
             document.getElementById('m-name').innerText = s.fullname;
             document.getElementById('m-grade').innerText = s.grade;
-            document.getElementById('m-disability').innerText = s.disability_type || 'บุคคลทั่วไป';
-            document.getElementById('m-outstanding').innerText = s.outstanding_subject || '-';
-            document.getElementById('m-note').innerText = s.note || 'ไม่มีข้อมูลเพิ่มเติม';
+            document.getElementById('m-disability-input').value = s.disability_type || '';
+            document.getElementById('m-outstanding-input').value = s.outstanding_subject || '';
+            document.getElementById('m-note-input').value = s.note || '';
 
             const modal = document.getElementById('detail-modal');
             const box = document.getElementById('modal-box');
             modal.classList.remove('hidden');
             setTimeout(() => box.classList.remove('scale-95'), 10);
             document.body.style.overflow = 'hidden';
+        }
+
+        async function saveStudentUpdate() {
+            const fullname = document.getElementById('m-name').innerText;
+            const payload = {
+                fullname: fullname,
+                disability_type: document.getElementById('m-disability-input').value,
+                outstanding_subject: document.getElementById('m-outstanding-input').value,
+                note: document.getElementById('m-note-input').value
+            };
+
+            try {
+                const res = await fetch('/api/update_student_details', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+                if (result.success) {
+                    alert(result.message);
+                    location.reload();
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            } catch (err) {
+                alert('Connection Error. Please try again.');
+            }
         }
 
         function closeModal() {

@@ -218,11 +218,21 @@ def delete_user(username):
 @login_required
 @admin_required
 def get_user_access(username):
-    """ ดึงข้อมูลสิทธิ์การเข้าถึงรายห้อง/รายคน ของผู้ใช้งาน """
-    accs = list(mongo.db.user_access.find({"username": username}))
-    for a in accs:
-        a['id'] = str(a['_id'])
-    return jsonify({"access": accs})
+    """ ดึงข้อมูลสิทธิ์การเข้าถึงรายห้อง/รายคน ของผู้ใช้งาน และป้องกัน JSON Error """
+    try:
+        accs = list(mongo.db.user_access.find({"username": username}))
+        for a in accs:
+            # ✅ 1. แปลง ObjectId เป็น String เก็บไว้ใน key ชื่อ 'id'
+            a['id'] = str(a['_id'])
+            
+            # ✅ 2. สำคัญมาก: ต้องลบ key '_id' เดิมออก หรือแปลงมันเป็น string ด้วย
+            # เพื่อไม่ให้ jsonify พังเวลาเจอ Object พิเศษของ MongoDB
+            del a['_id'] 
+            
+        return jsonify({"access": accs})
+    except Exception as e:
+        print(f"❌ Get Access Error: {str(e)}")
+        return jsonify({"access": [], "error": str(e)}), 500
 
 @app.route('/api/grant_access', methods=['POST'])
 @login_required
@@ -422,13 +432,13 @@ def ask_ai():
 
         # 3. กำหนด Template การตอบ IEP
         iep_template = """
-        โครงสร้างการตอบแผน IEP:
+        แผน IEP:
         ---
-        📌 ข้อมูลนักเรียน: [ระบุชื่อ-นามสกุล และชั้นเรียน]
-        🔍 วิเคราะห์ปัญหา (จุดที่ควรพัฒนา): [สรุปจากวิชาที่บกพร่อง]
-        🌟 จุดแข็ง/ความสามารถพิเศษ: [สรุปจากวิชาที่โดดเด่น]
-        💡 แนวทางการช่วยเหลือ/เทคนิคการสอน: [ระบุเป็นข้อๆ ให้ครูนำไปใช้ได้จริง]
-        📝 ข้อควรระวัง/หมายเหตุ: [ดึงมาจากหมายเหตุในระบบ]
+        ข้อมูลนักเรียน: [ระบุชื่อ-นามสกุล และชั้นเรียน]
+        วิเคราะห์ปัญหา (จุดที่ควรพัฒนา): [สรุปจากวิชาที่บกพร่อง]
+        จุดแข็ง/ความสามารถพิเศษ: [สรุปจากวิชาที่โดดเด่น]
+        แนวทางการช่วยเหลือ/เทคนิคการสอน: [ระบุเป็นข้อๆ ให้ครูนำไปใช้ได้จริง]
+        ข้อควรระวัง/หมายเหตุ: [ดึงมาจากหมายเหตุในระบบ]
         ---
         """
 
@@ -449,7 +459,7 @@ def ask_ai():
                 "Content-Type": "application/json"
             }, 
             json={
-                "model": "gemini-3.1-pro-preview",
+                "model": "gemini-3.1-flash-lite-preview",
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.4,
                 "top_p": 0.9
@@ -529,6 +539,42 @@ def clear_students():
     """ Route พิเศษสำหรับล้างข้อมูลนักเรียนทั้งหมดในกรณีที่มีข้อมูลขยะจำนวนมาก """
     count = mongo.db.students.delete_many({})
     return f"ล้างข้อมูลนักเรียนสำเร็จ! ลบไปทั้งหมด {count.deleted_count} รายการ เพื่อเริ่มนำเข้าข้อมูลใหม่ที่ถูกต้อง"
+
+@app.route('/api/update_student_details', methods=['POST'])
+@login_required
+def update_student_details():
+    """ ให้คุณครูอัปเดตวิชาบกพร่อง/โดดเด่น/หมายเหตุ ได้ทันทีเมื่อเด็กดีขึ้น """
+    try:
+        data = request.json
+        fullname = data.get('fullname')
+        
+        # ค้นหาและอัปเดตข้อมูล
+        # เราอ้างอิงด้วย fullname เพราะเราวางระบบกันชื่อซ้ำไว้แล้ว
+        update_data = {
+            "disability_type": data.get('disability_type'),
+            "outstanding_subject": data.get('outstanding_subject'),
+            "note": data.get('note')
+        }
+        
+        # อัปเดตฟิลด์ technique ด้วยเพื่อให้ AI ได้ข้อมูลล่าสุดไปวิเคราะห์ IEP
+        combined_tech = (
+            f"วิชาที่บกพร่อง: {data.get('disability_type') or '-'} | "
+            f"วิชาที่โดดเด่น: {data.get('outstanding_subject') or '-'} | "
+            f"หมายเหตุ: {data.get('note') or '-'}"
+        )
+        update_data["technique"] = combined_tech
+
+        result = mongo.db.students.update_one(
+            {"fullname": fullname},
+            {"$set": update_data}
+        )
+        
+        if result.modified_count > 0:
+            return jsonify({"success": True, "message": "อัปเดตข้อมูลสำเร็จ! AI ได้รับข้อมูลใหม่แล้วครับ"})
+        return jsonify({"success": False, "message": "ไม่มีการเปลี่ยนแปลงข้อมูล"})
+        
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 # -----------------------------------------------------------------------------
 # START APPLICATION (เริ่มต้นการทำงานของแอปพลิเคชัน)
