@@ -228,16 +228,19 @@ def get_user_access(username):
 @login_required
 @admin_required
 def grant_access():
-    """ มอบสิทธิ์การเข้าถึงชั้นเรียนหรือนักเรียนรายบุคคลให้ผู้ใช้ """
+    """ มอบสิทธิ์การเข้าถึง: รองรับทั้งสิทธิ์รายห้อง และสิทธิ์รายบุคคล """
     data = request.json
-    std_id = data.get('student_id')
+    username = data.get('username')
+    grade = data.get('grade')
+    # ✅ เปลี่ยนจาก student_id เป็น fullname เพื่อรองรับ Parent
+    student_fullname = data.get('student_fullname') 
     
     mongo.db.user_access.insert_one({
-        "username": data.get('username'), 
-        "accessible_grade": data.get('grade'), 
-        "accessible_student_id": int(std_id) if std_id else None
+        "username": username, 
+        "accessible_grade": grade if grade else None, 
+        "accessible_student_name": student_fullname if student_fullname else None
     })
-    return jsonify({"success": True})
+    return jsonify({"success": True, "message": "มอบสิทธิ์การเข้าถึงเรียบร้อยแล้วครับ"})
 
 @app.route('/api/revoke_access/<access_id>', methods=['POST'])
 @login_required
@@ -382,21 +385,42 @@ def add_student():
 @app.route('/ask_ai', methods=['POST'])
 @login_required
 def ask_ai():
-    """ ส่งคำถามไปยัง AI โดยใช้ Gemini 3.1 Pro Preview พร้อม Template IEP และบริบทนักเรียน 200 คน """
     user_input = request.json.get('message')
+    username = session.get('username')
+    permission = session.get('permission')
     
     try:
-        # 1. ดึงข้อมูลนักเรียนทั้งหมด (รองรับถึง 200 คนตามที่พี่เตรียมไว้)
-        # ดึงฟิลด์ fullname, grade และ technique (ที่รวมจุดอ่อน/จุดเด่น/หมายเหตุไว้แล้ว)
-        students = list(mongo.db.students.find().limit(200))
-        
-        # สร้างบริบทข้อมูลนักเรียนให้ AI (Context)
+        # ✅ 1. กรองข้อมูลนักเรียนตามสิทธิ์ของผู้ใช้งาน (Security Check)
+        if permission in ['Admin', 'Super Admin']:
+            # Admin เห็นและถามถึงเด็กได้ทุกคน (ดึงมา 200 คนตามที่เตรียมไว้)
+            students_data = list(mongo.db.students.find().limit(200))
+        else:
+            # ครู หรือ ผู้ปกครอง: ดึงเฉพาะรายชื่อที่มีสิทธิ์เข้าถึงจาก user_access
+            access_list = list(mongo.db.user_access.find({"username": username}))
+            
+            allowed_grades = [a.get('accessible_grade') for a in access_list if a.get('accessible_grade')]
+            allowed_names = [a.get('accessible_student_name') for a in access_list if a.get('accessible_student_name')]
+            
+            # ค้นหานักเรียนที่อยู่ในห้องที่ได้รับสิทธิ์ "หรือ" มีชื่อตรงกับที่ได้รับสิทธิ์
+            query = {
+                "$or": [
+                    {"grade": {"$in": allowed_grades}},
+                    {"fullname": {"$in": allowed_names}}
+                ]
+            }
+            students_data = list(mongo.db.students.find(query))
+
+        # ตรวจสอบว่ามีข้อมูลนักเรียนให้ AI วิเคราะห์ไหม
+        if not students_data:
+            return jsonify({"reply": "ขออภัยครับ คุณยังไม่ได้รับสิทธิ์ให้เข้าถึงข้อมูลนักเรียนในระบบ จึงไม่สามารถวิเคราะห์ข้อมูลได้"})
+
+        # ✅ 2. สร้างบริบท (Context) จากข้อมูลที่มีสิทธิ์เท่านั้น
         ctx = "\n".join([
             f"- {s.get('fullname')} (ชั้น {s.get('grade')}) | ข้อมูล: {s.get('technique')}" 
-            for s in students
+            for s in students_data
         ])
 
-        # 2. กำหนด Template การตอบ IEP (พี่สามารถปรับแก้ข้อความในนี้ได้ตามใจชอบ)
+        # 3. กำหนด Template การตอบ IEP
         iep_template = """
         โครงสร้างการตอบแผน IEP:
         ---
@@ -408,16 +432,16 @@ def ask_ai():
         ---
         """
 
-        # 3. สร้าง Prompt ที่สมบูรณ์ (System Instruction + Context + User Input)
+        # 4. สร้าง Prompt
         prompt = (
-            f"คุณคือผู้เชี่ยวชาญด้านการศึกษาพิเศษและการจัดทำแผน IEP (Individualized Education Program)\n"
-            f"กรุณาใช้ข้อมูลนักเรียนด้านล่างนี้เพื่อตอบคำถาม และต้องตอบตามรูปแบบ Template นี้เท่านั้น:\n"
+            f"คุณคือผู้เชี่ยวชาญด้านการศึกษาพิเศษและการจัดทำแผน IEP\n"
+            f"กรุณาใช้ข้อมูลนักเรียนด้านล่างนี้เพื่อตอบคำถามตาม Template นี้เท่านั้น:\n"
             f"{iep_template}\n\n"
-            f"รายชื่อนักเรียนในระบบ:\n{ctx}\n\n"
-            f"คำถามจากคุณครู: {user_input}"
+            f"รายชื่อนักเรียนที่คุณมีสิทธิ์เข้าถึง:\n{ctx}\n\n"
+            f"คำถาม: {user_input}"
         )
 
-        # 4. เรียกใช้ API Gemini 3.1 Pro Preview (ตั้ง Timeout เผื่อรุ่น Pro คิดนาน)
+        # 5. เรียกใช้ API Gemini 3.1 Pro Preview
         res = requests.post(
             f"{AI_BASE_URL}/chat/completions", 
             headers={
@@ -427,29 +451,26 @@ def ask_ai():
             json={
                 "model": "gemini-3.1-pro-preview",
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.4, # ปรับให้นิ่งเพื่อความแม่นยำของข้อมูล
+                "temperature": 0.4,
                 "top_p": 0.9
             }, 
-            timeout=90 # ขยายเวลาเป็น 90 วินาทีสำหรับรุ่น Pro
+            timeout=90
         )
         
         if res.status_code == 200:
             result_json = res.json()
-            # ตรวจสอบโครงสร้าง response จาก API มข.
             if 'choices' in result_json and len(result_json['choices']) > 0:
                 reply = result_json['choices'][0]['message']['content']
                 return jsonify({"reply": reply})
-            else:
-                return jsonify({"reply": "AI ตอบกลับมาในรูปแบบที่ไม่ถูกต้อง"}), 500
+            return jsonify({"reply": "AI ตอบกลับมาในรูปแบบที่ไม่ถูกต้อง"}), 500
         else:
-            print(f"❌ AI API Error: {res.status_code} - {res.text}")
-            return jsonify({"reply": f"AI ขัดข้อง (Error: {res.status_code}) กรุณาลองใหม่ครับ"}), res.status_code
+            return jsonify({"reply": f"AI ขัดข้อง (Error: {res.status_code})"}), res.status_code
 
     except requests.exceptions.Timeout:
-        return jsonify({"reply": "AI ใช้เวลาประมวลผลนานเกินไป (Timeout) กรุณาลองใหม่หรือลดขนาดคำถามครับ"}), 504
+        return jsonify({"reply": "AI ใช้เวลาคิดนานเกินไป กรุณาลองใหม่ครับ"}), 504
     except Exception as e:
         print(f"❌ Ask AI Error: {str(e)}")
-        return jsonify({"reply": f"เกิดข้อผิดพลาดในระบบ: {str(e)}"}), 500
+        return jsonify({"reply": f"เกิดข้อผิดพลาด: {str(e)}"}), 500
 
 # -----------------------------------------------------------------------------
 # 8. PAGE NAVIGATION (การเข้าถึงหน้าแสดงผลข้อมูล)
@@ -464,20 +485,34 @@ def chatbot_page():
 @app.route('/student_list')
 @login_required
 def student_list_page():
-    """ หน้าแสดงรายชื่อนักเรียนโดยกรองตามสิทธิ์การเข้าถึงของผู้ใช้งาน """
+    """ หน้าแสดงรายชื่อนักเรียน: กรองตามสิทธิ์รายห้อง หรือ รายบุคคล """
     username = session.get('username')
     permission = session.get('permission')
     
-    # ✅ ถ้าเป็น Admin หรือ Super Admin ให้เห็นข้อมูลนักเรียนทั้งหมด
+    # 1. ถ้าเป็น Admin เห็นหมดทั้งโรงเรียน
     if permission in ['Admin', 'Super Admin']:
         students = list(mongo.db.students.find().sort("fullname", 1))
     else:
-        # ✅ ถ้าเป็นคุณครู ให้เห็นเฉพาะชั้นเรียนที่ได้รับมอบสิทธิ์ (Grant Access) ไว้เท่านั้น
+        # 2. ดึงรายการสิทธิ์ทั้งหมดที่ User คนนี้มี
         access_list = list(mongo.db.user_access.find({"username": username}))
-        allowed_grades = [acc.get('accessible_grade') for acc in access_list if acc.get('accessible_grade')]
         
-        # ค้นหานักเรียนที่อยู่ในชั้นเรียนที่คุณครูมีสิทธิ์
-        students = list(mongo.db.students.find({"grade": {"$in": allowed_grades}}).sort("fullname", 1))
+        # กรองเอาเฉพาะชื่อห้องที่ได้รับสิทธิ์
+        allowed_grades = [a.get('accessible_grade') for a in access_list if a.get('accessible_grade')]
+        # กรองเอาเฉพาะชื่อนักเรียนที่ได้รับสิทธิ์ (สำหรับ Parent)
+        allowed_names = [a.get('accessible_student_name') for a in access_list if a.get('accessible_student_name')]
+        
+        # 🔍 ค้นหา: ถ้าอยู่ในห้องที่ระบุ "หรือ" มีชื่อตรงกับที่ได้รับสิทธิ์ ให้แสดงผล
+        query = {
+            "$or": [
+                {"grade": {"$in": allowed_grades}},
+                {"fullname": {"$in": allowed_names}}
+            ]
+        }
+        students = list(mongo.db.students.find(query).sort("fullname", 1))
+        
+    # แปลง ObjectId เป็น String เพื่อให้ส่งไปเป็น JSON ในหน้า HTML ได้
+    for s in students:
+        s['_id'] = str(s['_id'])
         
     return render_template('student_list.html', students=students)
 

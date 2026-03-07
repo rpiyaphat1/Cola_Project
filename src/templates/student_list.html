@@ -26,160 +26,223 @@
                 <div class="font-bold text-xl uppercase italic tracking-tighter border-r border-indigo-700 pr-10">
                     IEP Smart Assistant
                 </div>
-
                 <div class="flex space-x-8">
                     <a href="{{ url_for('chatbot_page') }}"
-                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'chatbot_page' %}border-b-2 border-white pb-1{% endif %}">
-                        Chatbot AI
-                    </a>
-
+                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'chatbot_page' %}border-b-2 border-white pb-1{% endif %}">Chatbot
+                        AI</a>
                     <a href="{{ url_for('student_list_page') }}"
-                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'student_list_page' %}border-b-2 border-white pb-1{% endif %}">
-                        รายชื่อนักเรียน
-                    </a>
-
+                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'student_list_page' %}border-b-2 border-white pb-1{% endif %}">รายชื่อนักเรียน</a>
                     {% if session['permission'] in ['Admin', 'Super Admin'] %}
                     <a href="{{ url_for('admin_dashboard') }}"
-                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'admin_dashboard' %}border-b-2 border-white pb-1{% endif %}">
-                        Dashboard
-                    </a>
-
+                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'admin_dashboard' %}border-b-2 border-white pb-1{% endif %}">Dashboard</a>
                     <a href="{{ url_for('admin_import_page') }}"
-                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'admin_import_page' %}border-b-2 border-white pb-1{% endif %}">
-                        Import
-                    </a>
-
+                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'admin_import_page' %}border-b-2 border-white pb-1{% endif %}">Import</a>
                     <a href="{{ url_for('register_page') }}"
-                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'register_page' %}border-b-2 border-white pb-1{% endif %}">
-                        Register
-                    </a>
+                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'register_page' %}border-b-2 border-white pb-1{% endif %}">Register</a>
                     {% endif %}
                 </div>
             </div>
-
             <div class="relative">
                 <button onclick="toggleDropdown()"
                     class="bg-indigo-800 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition flex items-center shadow-md">
                     {{ session['displayname'] }} <span class="ml-2 text-[10px]">▼</span>
                 </button>
-
                 <div id="user-menu"
                     class="absolute right-0 w-48 mt-2 py-2 bg-white rounded-xl shadow-xl hidden z-[150] text-slate-700 border border-slate-100">
                     <a href="{{ url_for('setting_page') }}"
                         class="block px-4 py-2 hover:bg-indigo-50 transition text-xs">⚙️ ตั้งค่า</a>
                     <hr class="my-1 border-slate-100">
                     <a href="/logout"
-                        class="block px-4 py-2 text-sm text-rose-600 font-bold hover:bg-rose-50 transition">
-                        ออกจากระบบ
-                    </a>
+                        class="block px-4 py-2 text-sm text-rose-600 font-bold hover:bg-rose-50 transition">ออกจากระบบ</a>
                 </div>
             </div>
         </div>
     </nav>
 
     <main class="max-w-7xl mx-auto w-full px-6 pb-12">
-        <div class="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
-            <div class="p-8 border-b border-gray-50 flex justify-between items-center">
-                <div>
-                    <h2 class="text-2xl font-extrabold text-gray-800">รายชื่อนักเรียน</h2>
-                    <p class="text-gray-400 text-sm italic">พบข้อมูลทั้งหมด {{ students|length }} รายการ</p>
+        <div class="mb-8 flex justify-between items-end">
+            <div>
+                <h2 class="text-3xl font-extrabold text-slate-800 uppercase italic">📋 รายชื่อนักเรียน</h2>
+                <p class="text-slate-500 text-sm">จัดการข้อมูลนักเรียนและแผนการสอนเฉพาะบุคคล</p>
+            </div>
+            <p
+                class="bg-white px-4 py-2 rounded-2xl shadow-sm text-xs font-bold text-indigo-600 border border-indigo-50">
+                ทั้งหมด {{ students|length }} รายการ
+            </p>
+        </div>
+
+        {% if session['permission'] == 'Parent' %}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for student in students %}
+            <div
+                class="bg-white rounded-[2rem] shadow-xl p-8 border border-gray-100 hover:shadow-2xl transition-all border-t-4 border-t-indigo-500">
+                <div class="flex justify-between items-center mb-6">
+                    <span
+                        class="bg-indigo-50 text-indigo-700 px-4 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest">{{
+                        student.grade }}</span>
+                    <span class="text-slate-200 font-mono text-xs italic">ID: {{ student.student_id or loop.index
+                        }}</span>
+                </div>
+                <h3 class="text-2xl font-bold text-slate-800 mb-2">{{ student.fullname }}</h3>
+                <p class="text-rose-500 text-xs font-bold uppercase tracking-wide mb-6">📌 {{ student.disability_type or
+                    'บุคคลทั่วไป' }}</p>
+                <button onclick="openModalFromData({{ student | tojson }})"
+                    class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-sm hover:bg-indigo-700 shadow-lg transform active:scale-95 transition-all">
+                    ดูรายละเอียดเชิงลึก
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% else %}
+        <div id="grade-cards-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+            {% set grouped_students = students | groupby('grade') %}
+            {% for grade, members in grouped_students %}
+            <div onclick="filterByGrade('{{ grade }}')"
+                class="bg-white rounded-[2.5rem] shadow-lg p-8 border border-slate-50 text-center cursor-pointer hover:bg-indigo-900 hover:text-white transition-all group transform hover:-translate-y-2 shadow-indigo-100/50">
+                <div
+                    class="bg-indigo-50 group-hover:bg-indigo-800 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-4 transition-colors">
+                    <span class="text-2xl group-hover:scale-125 transition-transform">🏫</span>
+                </div>
+                <h3 class="text-xl font-black uppercase tracking-tighter">{{ grade }}</h3>
+                <p
+                    class="text-slate-400 group-hover:text-indigo-200 text-[10px] font-bold mt-1 uppercase tracking-widest">
+                    {{ members|length }} นักเรียน</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div id="student-list-container" class="hidden space-y-6">
+            <button onclick="showAllGrades()"
+                class="flex items-center text-indigo-600 font-black text-xs uppercase tracking-widest hover:text-indigo-800 transition">
+                <span class="mr-2">←</span> กลับหน้าห้องเรียน
+            </button>
+            <div class="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-gray-100">
+                <div class="p-8 bg-indigo-50/50 border-b border-indigo-100 flex justify-between items-center">
+                    <h3 id="display-grade-name" class="text-xl font-black text-indigo-900 uppercase italic"></h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr
+                                class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b border-slate-100">
+                                <th class="px-10 py-6">เลขที่</th>
+                                <th class="px-10 py-6">ชื่อ-นามสกุล</th>
+                                <th class="px-10 py-6">ประเภทความบกพร่อง</th>
+                                <th class="px-10 py-6 text-right">แอคชั่น</th>
+                            </tr>
+                        </thead>
+                        <tbody id="filtered-student-body" class="divide-y divide-slate-50">
+                        </tbody>
+                    </table>
                 </div>
             </div>
-
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr
-                            class="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">
-                            <th class="px-8 py-5">ลำดับ</th>
-                            <th class="px-8 py-5">ชื่อ-นามสกุล</th>
-                            <th class="px-8 py-5 text-center">ชั้นเรียน</th>
-                            <th class="px-8 py-5">ความบกพร่อง</th>
-                            <th class="px-8 py-5 text-right">จัดการ</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-50 text-sm">
-                        {% for student in students %}
-                        <tr class="hover:bg-indigo-50/30 transition">
-                            <td class="px-8 py-4 font-mono text-gray-300 text-xs">{{ loop.index }}</td>
-                            <td class="px-8 py-4 font-bold text-gray-700">{{ student.fullname }}</td>
-                            <td class="px-8 py-4 text-center">
-                                <span
-                                    class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-lg font-bold text-[10px]">{{
-                                    student.grade }}</span>
-                            </td>
-                            <td class="px-8 py-4 text-gray-500">{{ student.disability_type or '-' }}</td>
-                            <td class="px-8 py-4 text-right">
-                                <button data-name="{{ student.fullname }}" data-grade="{{ student.grade }}"
-                                    data-disability="{{ student.disability_type or 'ไม่ระบุ' }}"
-                                    data-notes="{{ student.notes or student.details or 'ไม่มีรายละเอียดเพิ่มเติม' }}"
-                                    onclick="openModal(this)"
-                                    class="bg-indigo-600 text-white px-5 py-2 rounded-xl font-bold text-xs hover:bg-indigo-700 transition-all shadow-md active:scale-95">
-                                    ดูรายละเอียด
-                                </button>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="5" class="px-8 py-20 text-center text-gray-400 italic">ไม่พบข้อมูลนักเรียน</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
         </div>
+        {% endif %}
     </main>
 
     <div id="detail-modal"
-        class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4">
-        <div class="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl overflow-hidden flex flex-col scale-95 transition-transform duration-300"
+        class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden flex flex-col scale-95 transition-all duration-300"
             id="modal-box">
-            <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-indigo-50/50">
-                <h3 class="text-lg font-black text-indigo-900 uppercase">ข้อมูลเชิงลึก</h3>
+            <div class="p-8 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
+                <h3 class="text-sm font-black text-indigo-900 uppercase tracking-widest italic">Student Deep Insight
+                </h3>
                 <button onclick="closeModal()"
-                    class="text-gray-400 hover:text-rose-500 transition text-2xl font-bold">×</button>
+                    class="text-slate-300 hover:text-rose-500 transition text-3xl font-light">&times;</button>
             </div>
-
-            <div class="p-8 space-y-6">
+            <div class="p-10 space-y-8">
                 <div class="flex justify-between items-start">
                     <div>
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">นักเรียน</label>
-                        <p id="m-name" class="text-xl font-bold text-slate-700"></p>
+                        <label class="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Full
+                            Name</label>
+                        <p id="m-name" class="text-2xl font-bold text-slate-800"></p>
                     </div>
                     <div class="text-right">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">ชั้น</label>
-                        <p id="m-grade" class="text-xl font-bold text-indigo-600"></p>
+                        <label class="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Class</label>
+                        <p id="m-grade" class="text-2xl font-black text-indigo-600 italic"></p>
                     </div>
                 </div>
-
                 <div>
-                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">ความบกพร่อง</label>
-                    <p id="m-disability" class="mt-1 text-sm font-bold text-rose-600"></p>
+                    <label class="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Status</label>
+                    <p id="m-disability" class="mt-1 text-sm font-bold text-rose-500"></p>
                 </div>
-
-                <div class="p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">ปัญหาที่พบ
-                        / รายละเอียดเพิ่มเติม</label>
-                    <p id="m-notes" class="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap italic"></p>
+                <div class="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 space-y-4">
+                    <div>
+                        <label
+                            class="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-1 block">วิชาที่โดดเด่น</label>
+                        <p id="m-outstanding" class="text-slate-700 font-bold text-sm"></p>
+                    </div>
+                    <hr class="border-slate-200/50">
+                    <div>
+                        <label
+                            class="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-1 block">ปัญหา/หมายเหตุ</label>
+                        <p id="m-note" class="text-slate-600 text-xs italic leading-relaxed"></p>
+                    </div>
                 </div>
             </div>
-
-            <div class="p-6 bg-gray-50 text-center">
+            <div class="p-8 pt-0">
                 <button onclick="closeModal()"
-                    class="w-full bg-white border border-gray-200 text-gray-600 py-3 rounded-2xl font-bold text-sm hover:bg-gray-100 transition shadow-sm">ปิดหน้าต่าง</button>
+                    class="w-full bg-slate-800 text-white py-4 rounded-2xl font-bold text-xs hover:bg-black transition shadow-lg">ปิดข้อมูล</button>
             </div>
         </div>
     </div>
 
     <script>
+        // ข้อมูลจาก Server
+        const allStudents = {{ students | tojson }};
+
         function toggleDropdown() { document.getElementById('user-menu').classList.toggle('hidden'); }
 
-        // แก้ไขฟังก์ชันใหม่: รับค่าจาก attribute ของปุ่ม (เลิกใช้ JSON พังๆ)
-        function openModal(btn) {
-            document.getElementById('m-name').innerText = btn.getAttribute('data-name');
-            document.getElementById('m-grade').innerText = btn.getAttribute('data-grade');
-            document.getElementById('m-disability').innerText = btn.getAttribute('data-disability');
-            document.getElementById('m-notes').innerText = btn.getAttribute('data-notes');
+        // --- ระบบกรองรายห้อง ---
+        function filterByGrade(grade) {
+            const container = document.getElementById('student-list-container');
+            const grid = document.getElementById('grade-cards-grid');
+            const body = document.getElementById('filtered-student-body');
+            const title = document.getElementById('display-grade-name');
+
+            title.innerText = `Classroom: ${grade}`;
+            body.innerHTML = '';
+
+            const filtered = allStudents.filter(s => s.grade === grade);
+            filtered.sort((a, b) => (a.student_id || 0) - (b.student_id || 0));
+
+            filtered.forEach(s => {
+                const row = `
+                    <tr class="hover:bg-indigo-50/30 transition group">
+                        <td class="px-10 py-6 font-mono text-slate-300 text-xs">${s.student_id || '-'}</td>
+                        <td class="px-10 py-6 font-bold text-slate-700">${s.fullname}</td>
+                        <td class="px-10 py-6">
+                            <span class="text-xs font-bold text-rose-400 italic">${s.disability_type || 'ปกติ'}</span>
+                        </td>
+                        <td class="px-10 py-6 text-right">
+                            <button onclick='openModalFromData(${JSON.stringify(s)})' 
+                                class="bg-white border border-slate-200 text-slate-600 px-6 py-2 rounded-xl font-black text-[10px] uppercase hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all shadow-sm">
+                                View Detail
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                body.innerHTML += row;
+            });
+
+            grid.classList.add('hidden');
+            container.classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function showAllGrades() {
+            document.getElementById('student-list-container').classList.add('hidden');
+            document.getElementById('grade-cards-grid').classList.remove('hidden');
+        }
+
+        // --- ระบบ Modal ---
+        function openModalFromData(s) {
+            document.getElementById('m-name').innerText = s.fullname;
+            document.getElementById('m-grade').innerText = s.grade;
+            document.getElementById('m-disability').innerText = s.disability_type || 'บุคคลทั่วไป';
+            document.getElementById('m-outstanding').innerText = s.outstanding_subject || '-';
+            document.getElementById('m-note').innerText = s.note || 'ไม่มีข้อมูลเพิ่มเติม';
 
             const modal = document.getElementById('detail-modal');
             const box = document.getElementById('modal-box');
