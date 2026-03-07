@@ -275,7 +275,6 @@ def admin_import_page():
 @login_required
 @admin_required
 def import_excel():
-    """ จัดการการประมวลผลไฟล์และบันทึกลงฐานข้อมูล """
     try:
         if 'file' not in request.files:
             return jsonify({"success": False, "error": "ไม่พบไฟล์ที่ส่งมาครับ"}), 400
@@ -283,7 +282,6 @@ def import_excel():
         file = request.files['file']
         filename = file.filename.lower()
         
-        # ตรวจสอบและอ่านไฟล์รองรับภาษาไทยแบบ UTF-8
         if filename.endswith('.xlsx'):
             df = pd.read_excel(file)
         elif filename.endswith('.csv'):
@@ -291,11 +289,26 @@ def import_excel():
         else:
             return jsonify({"success": False, "error": "รองรับเฉพาะไฟล์ .xlsx และ .csv เท่านั้น"}), 400
 
-        # Mapping หัวคอลัมน์จากภาษาไทยเป็นชื่อฟิลด์ในระบบ
-        mapping = {'ชื่อ-นามสกุล': 'fullname', 'ชั้น': 'grade'}
+        # ✅ 1. Mapping หัวคอลัมน์ใหม่ให้ครบ (เลขที่, วิชาเด่น, หมายเหตุ)
+        mapping = {
+            'เลขที่': 'student_id',
+            'ชื่อ-นามสกุล': 'fullname',
+            'ชื่อเล่น': 'nickname',
+            'ชั้น': 'grade',
+            'วิชาที่บกพร่อง': 'disability_type',
+            'วิชาที่โดดเด่น': 'outstanding_subject',
+            'หมายเหตุ': 'note'
+        }
         df = df.rename(columns=mapping)
 
-        # เคลียร์ค่าว่างเพื่อป้องกัน Error ใน MongoDB
+        # ✅ 2. รวมข้อมูลจุดอ่อน/จุดแข็ง/หมายเหตุ เข้าไปในฟิลด์ technique เพื่อให้ AI (Gemini) วิเคราะห์ได้เก่งขึ้น
+        # ใช้ fillna('') เพื่อป้องกันค่า NaN ทำให้ข้อความพัง
+        df['technique'] = (
+            "วิชาที่บกพร่อง: " + df.get('disability_type', '').fillna('-').astype(str) + 
+            " | วิชาที่โดดเด่น: " + df.get('outstanding_subject', '').fillna('-').astype(str) + 
+            " | หมายเหตุ: " + df.get('note', '').fillna('-').astype(str)
+        )
+
         df = df.where(pd.notnull(df), None)
         data = df.to_dict(orient='records')
 
@@ -304,33 +317,32 @@ def import_excel():
             return jsonify({"success": True, "message": f"นำเข้าสำเร็จ {len(data)} รายการครับ!"})
         
         return jsonify({"success": False, "error": "ไม่พบข้อมูลในไฟล์ที่เลือก"}), 400
-
     except Exception as e:
-        print(f"❌ Excel Import Error: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/add_student', methods=['POST'])
 @login_required
 @admin_required
 def add_student():
-    """ เพิ่มข้อมูลนักเรียนรายคนผ่านฟอร์มบนเว็บไซต์ """
     try:
         data = request.json
         if not data.get('fullname') or not data.get('grade'):
             return jsonify({"success": False, "message": "กรุณาระบุชื่อและชั้นเรียนด้วยครับ"}), 400
             
         mongo.db.students.insert_one({
+            "student_id": data.get('student_id'), # เก็บเลขที่
             "nickname": data.get('nickname'),
             "fullname": data.get('fullname'),
             "grade": data.get('grade'),
             "disability_type": data.get('disability_type'),
+            "outstanding_subject": data.get('outstanding_subject'), # เก็บวิชาเด่น
+            "note": data.get('note'), # เก็บหมายเหตุ
             "technique": data.get('technique'),
             "timestamp": ObjectId()
         })
         return jsonify({"success": True, "message": "บันทึกข้อมูลนักเรียนสำเร็จครับ!"})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
-
 # -----------------------------------------------------------------------------
 # 7. AI CHAT SYSTEM (GEMINI-2.5-FLASH)
 # -----------------------------------------------------------------------------

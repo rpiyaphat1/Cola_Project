@@ -119,28 +119,54 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label
+                            class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">เลขที่</label>
+                        <input type="number" id="student_id"
+                            class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 shadow-sm transition-all"
+                            placeholder="เช่น 1, 2, 3">
+                    </div>
+                    <div>
+                        <label
                             class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">ชั้น</label>
                         <select id="grade"
                             class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 font-bold text-sm shadow-sm cursor-pointer"
                             required>
-                            <option value="">เลือกชั้น (ป.1/1 - ป.6/17)</option>
+                            <option value="">เลือกชั้น (ป.1/1 - ป.6/15)</option>
                         </select>
                     </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label
                             class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">ประเภทความบกพร่อง</label>
                         <select id="disability_type"
                             class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 font-bold text-sm shadow-sm cursor-pointer">
-                            <option value="0">0. บุคคลทั่วไป</option>
-                            <option value="5">5. บกพร่องทางการเรียนรู้ (LD)</option>
-                            <option value="7">7. ออทิสติก</option>
+                            <option value="ปกติ">บุคคลทั่วไป</option>
+                            <option value="บกพร่องทางการเรียนรู้ (LD)">บกพร่องทางการเรียนรู้ (LD)</option>
+                            <option value="ออทิสติก">ออทิสติก</option>
                         </select>
+                    </div>
+                    <div>
+                        <label
+                            class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">วิชาที่โดดเด่น</label>
+                        <input type="text" id="outstanding_subject"
+                            class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 shadow-sm transition-all"
+                            placeholder="เช่น คณิตศาสตร์, พลศึกษา">
                     </div>
                 </div>
 
                 <div>
                     <label
-                        class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">วิธีรับมือ/เทคนิคเฉพาะ</label>
+                        class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">หมายเหตุ</label>
+                    <input type="text" id="note"
+                        class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 shadow-sm transition-all"
+                        placeholder="พฤติกรรมหรือข้อมูลเพิ่มเติม">
+                </div>
+
+                <div>
+                    <label
+                        class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 ml-1">วิธีรับมือ/เทคนิคเฉพาะ
+                        (สำหรับ AI)</label>
                     <textarea id="technique" rows="3"
                         class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 shadow-sm transition-all"
                         placeholder="เทคนิคการสอนเฉพาะบุคคล..."></textarea>
@@ -155,10 +181,10 @@
     </div>
 
     <script>
-        // --- 1. สร้างตัวเลือกชั้นเรียน ป.1/1 - ป.6/17 ---
+        // --- 1. สร้างตัวเลือกชั้นเรียน ป.1/1 - ป.6/15 ---
         const gradeSelect = document.getElementById('grade');
         for (let p = 1; p <= 6; p++) {
-            for (let room = 1; room <= 17; room++) {
+            for (let room = 1; room <= 15; room++) { // ปรับเป็น 15 ตามแผนข้อมูล 200 คน
                 let opt = document.createElement('option');
                 opt.value = `ป.${p}/${room}`;
                 opt.textContent = `ป.${p}/${room}`;
@@ -207,10 +233,13 @@
         // --- 4. ระบบบันทึกรายคน ---
         async function saveStudent() {
             const data = {
+                student_id: document.getElementById('student_id').value,
                 nickname: document.getElementById('nickname').value,
                 fullname: document.getElementById('fullname').value,
                 grade: document.getElementById('grade').value,
                 disability_type: document.getElementById('disability_type').value,
+                outstanding_subject: document.getElementById('outstanding_subject').value,
+                note: document.getElementById('note').value,
                 technique: document.getElementById('technique').value
             };
             if (!data.fullname || !data.grade) return alert('กรุณาระบุชื่อและชั้นเรียน');
