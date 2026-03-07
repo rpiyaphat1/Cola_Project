@@ -149,19 +149,6 @@ def register_page():
             
     return render_template('register.html')
 
-@app.route('/setup_admin')
-def setup_admin():
-    """ Route พิเศษสำหรับสร้างบัญชี Admin เริ่มต้นกรณีฐานข้อมูลว่างเปล่า """
-    if not mongo.db.users.find_one({"username": "admin"}):
-        mongo.db.users.insert_one({
-            "username": "admin",
-            "password": "A1234",
-            "displayname": "Super Admin",
-            "permission": "Super Admin"
-        })
-        return "สร้างบัญชี Admin เริ่มต้นสำเร็จ! (admin / A1234)"
-    return "ระบบมีบัญชี Admin อยู่แล้วใน Database นี้ครับ"
-
 # -----------------------------------------------------------------------------
 # 5. ADMIN DASHBOARD & USER MANAGEMENT (จุดที่แก้ไขคืนค่า Card User)
 # -----------------------------------------------------------------------------
@@ -343,41 +330,82 @@ def add_student():
         return jsonify({"success": True, "message": "บันทึกข้อมูลนักเรียนสำเร็จครับ!"})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+        
 # -----------------------------------------------------------------------------
-# 7. AI CHAT SYSTEM (GEMINI-2.5-FLASH)
+# 7. AI CHAT SYSTEM (GEMINI-3.1-PRO-PREVIEW)
 # -----------------------------------------------------------------------------
 
 @app.route('/ask_ai', methods=['POST'])
 @login_required
 def ask_ai():
-    """ ส่งคำถามไปยัง AI โดยแนบรายชื่อนักเรียนในระบบเป็นบริบท (Context) """
+    """ ส่งคำถามไปยัง AI โดยใช้ Gemini 3.1 Pro Preview พร้อม Template IEP และบริบทนักเรียน 200 คน """
     user_input = request.json.get('message')
     
     try:
-        # ดึงรายชื่อนักเรียนมาเป็นบริบทให้ AI วิเคราะห์เบื้องต้น (จำกัด 50 รายการ)
-        students = list(mongo.db.students.find().limit(50))
-        ctx = "\n".join([f"- {s.get('fullname')} ({s.get('grade')})" for s in students])
-        prompt = f"ข้อมูลนักเรียนปัจจุบันในระบบ:\n{ctx}\n\nคำถามจากผู้ใช้: {user_input}"
+        # 1. ดึงข้อมูลนักเรียนทั้งหมด (รองรับถึง 200 คนตามที่พี่เตรียมไว้)
+        # ดึงฟิลด์ fullname, grade และ technique (ที่รวมจุดอ่อน/จุดเด่น/หมายเหตุไว้แล้ว)
+        students = list(mongo.db.students.find().limit(200))
         
-        # ✅ เรียกใช้โมเดล gemini-2.5-flash ตามคำสั่ง
+        # สร้างบริบทข้อมูลนักเรียนให้ AI (Context)
+        ctx = "\n".join([
+            f"- {s.get('fullname')} (ชั้น {s.get('grade')}) | ข้อมูล: {s.get('technique')}" 
+            for s in students
+        ])
+
+        # 2. กำหนด Template การตอบ IEP (พี่สามารถปรับแก้ข้อความในนี้ได้ตามใจชอบ)
+        iep_template = """
+        โครงสร้างการตอบแผน IEP:
+        ---
+        📌 ข้อมูลนักเรียน: [ระบุชื่อ-นามสกุล และชั้นเรียน]
+        🔍 วิเคราะห์ปัญหา (จุดที่ควรพัฒนา): [สรุปจากวิชาที่บกพร่อง]
+        🌟 จุดแข็ง/ความสามารถพิเศษ: [สรุปจากวิชาที่โดดเด่น]
+        💡 แนวทางการช่วยเหลือ/เทคนิคการสอน: [ระบุเป็นข้อๆ ให้ครูนำไปใช้ได้จริง]
+        📝 ข้อควรระวัง/หมายเหตุ: [ดึงมาจากหมายเหตุในระบบ]
+        ---
+        """
+
+        # 3. สร้าง Prompt ที่สมบูรณ์ (System Instruction + Context + User Input)
+        prompt = (
+            f"คุณคือผู้เชี่ยวชาญด้านการศึกษาพิเศษและการจัดทำแผน IEP (Individualized Education Program)\n"
+            f"กรุณาใช้ข้อมูลนักเรียนด้านล่างนี้เพื่อตอบคำถาม และต้องตอบตามรูปแบบ Template นี้เท่านั้น:\n"
+            f"{iep_template}\n\n"
+            f"รายชื่อนักเรียนในระบบ:\n{ctx}\n\n"
+            f"คำถามจากคุณครู: {user_input}"
+        )
+
+        # 4. เรียกใช้ API Gemini 3.1 Pro Preview (ตั้ง Timeout เผื่อรุ่น Pro คิดนาน)
         res = requests.post(
             f"{AI_BASE_URL}/chat/completions", 
-            headers={"Authorization": f"Bearer {AI_API_KEY}"}, 
-            json={
-                "model": "gemini-2.5-flash",
-                "messages": [{"role": "user", "content": prompt}]
+            headers={
+                "Authorization": f"Bearer {AI_API_KEY}",
+                "Content-Type": "application/json"
             }, 
-            timeout=30
+            json={
+                "model": "gemini-3.1-pro-preview",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.4, # ปรับให้นิ่งเพื่อความแม่นยำของข้อมูล
+                "top_p": 0.9
+            }, 
+            timeout=90 # ขยายเวลาเป็น 90 วินาทีสำหรับรุ่น Pro
         )
         
         if res.status_code == 200:
-            reply = res.json()['choices'][0]['message']['content']
-            return jsonify({"reply": reply})
+            result_json = res.json()
+            # ตรวจสอบโครงสร้าง response จาก API มข.
+            if 'choices' in result_json and len(result_json['choices']) > 0:
+                reply = result_json['choices'][0]['message']['content']
+                return jsonify({"reply": reply})
+            else:
+                return jsonify({"reply": "AI ตอบกลับมาในรูปแบบที่ไม่ถูกต้อง"}), 500
         else:
-            return jsonify({"reply": f"AI ขัดข้องชั่วคราว (Error Code: {res.status_code})"})
+            print(f"❌ AI API Error: {res.status_code} - {res.text}")
+            return jsonify({"reply": f"AI ขัดข้อง (Error: {res.status_code}) กรุณาลองใหม่ครับ"}), res.status_code
 
+    except requests.exceptions.Timeout:
+        return jsonify({"reply": "AI ใช้เวลาประมวลผลนานเกินไป (Timeout) กรุณาลองใหม่หรือลดขนาดคำถามครับ"}), 504
     except Exception as e:
-        return jsonify({"reply": f"การเชื่อมต่อผิดพลาด: {str(e)}"}), 500
+        print(f"❌ Ask AI Error: {str(e)}")
+        return jsonify({"reply": f"เกิดข้อผิดพลาดในระบบ: {str(e)}"}), 500
 
 # -----------------------------------------------------------------------------
 # 8. PAGE NAVIGATION (การเข้าถึงหน้าแสดงผลข้อมูล)
