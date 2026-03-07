@@ -276,7 +276,7 @@ def import_excel():
         else:
             return jsonify({"success": False, "error": "รองรับเฉพาะไฟล์ .xlsx และ .csv เท่านั้น"}), 400
 
-        # ✅ 1. Mapping หัวคอลัมน์ใหม่ให้ครบ (เลขที่, วิชาเด่น, หมายเหตุ)
+        # ✅ 1. Mapping หัวคอลัมน์
         mapping = {
             'เลขที่': 'student_id',
             'ชื่อ-นามสกุล': 'fullname',
@@ -288,20 +288,40 @@ def import_excel():
         }
         df = df.rename(columns=mapping)
 
-        # ✅ 2. รวมข้อมูลจุดอ่อน/จุดแข็ง/หมายเหตุ เข้าไปในฟิลด์ technique เพื่อให้ AI (Gemini) วิเคราะห์ได้เก่งขึ้น
-        # ใช้ fillna('') เพื่อป้องกันค่า NaN ทำให้ข้อความพัง
+        # ✅ 2. รวมข้อมูลสำหรับ AI (technique)
         df['technique'] = (
-            "วิชาที่บกพร่อง: " + df.get('disability_type', '').fillna('-').astype(str) + 
-            " | วิชาที่โดดเด่น: " + df.get('outstanding_subject', '').fillna('-').astype(str) + 
-            " | หมายเหตุ: " + df.get('note', '').fillna('-').astype(str)
+            "วิชาที่บกพร่อง: " + df['disability_type'].fillna('-').astype(str) + 
+            " | วิชาที่โดดเด่น: " + df['outstanding_subject'].fillna('-').astype(str) + 
+            " | หมายเหตุ: " + df['note'].fillna('-').astype(str)
         )
 
         df = df.where(pd.notnull(df), None)
         data = df.to_dict(orient='records')
 
+        import_count = 0
+        skip_count = 0
+
         if data:
-            mongo.db.students.insert_many(data)
-            return jsonify({"success": True, "message": f"นำเข้าสำเร็จ {len(data)} รายการครับ!"})
+            # ✅ 3. วนลูปเช็คทีละคนก่อน Insert เพื่อป้องกันชื่อซ้ำ
+            for student in data:
+                # ตรวจสอบจากชื่อ-นามสกุล (fullname)
+                # ใช้ strip() เพื่อป้องกันช่องว่างส่วนเกินที่ทำให้มองว่าไม่ซ้ำ
+                name_to_check = str(student['fullname']).strip()
+                
+                exists = mongo.db.students.find_one({"fullname": name_to_check})
+                
+                if not exists:
+                    # ถ้ายังไม่มีในระบบ ให้บันทึก
+                    mongo.db.students.insert_one(student)
+                    import_count += 1
+                else:
+                    # ถ้ามีแล้ว ให้ข้าม (หรือพี่จะเปลี่ยนเป็น update_one ก็ได้นะ)
+                    skip_count += 1
+            
+            return jsonify({
+                "success": True, 
+                "message": f"นำเข้าสำเร็จ {import_count} รายการ (พบชื่อซ้ำข้ามไป {skip_count} รายการ)"
+            })
         
         return jsonify({"success": False, "error": "ไม่พบข้อมูลในไฟล์ที่เลือก"}), 400
     except Exception as e:
@@ -313,23 +333,38 @@ def import_excel():
 def add_student():
     try:
         data = request.json
-        if not data.get('fullname') or not data.get('grade'):
+        # ดึงชื่อออกมาแล้วตัดช่องว่างหัว-ท้าย เพื่อความแม่นยำในการเช็คซ้ำ
+        fullname = str(data.get('fullname', '')).strip()
+        grade = data.get('grade')
+
+        if not fullname or not grade:
             return jsonify({"success": False, "message": "กรุณาระบุชื่อและชั้นเรียนด้วยครับ"}), 400
             
+        # ✅ 1. ตรวจสอบว่าชื่อ-นามสกุลนี้ มีอยู่ในฐานข้อมูลแล้วหรือยัง
+        exists = mongo.db.students.find_one({"fullname": fullname})
+        if exists:
+            return jsonify({
+                "success": False, 
+                "message": f"ขออภัย รายชื่อ '{fullname}' มีอยู่ในระบบแล้ว (ชั้น {exists.get('grade')})"
+            }), 400
+
+        # ✅ 2. ถ้าไม่ซ้ำ ให้ทำการบันทึก
         mongo.db.students.insert_one({
-            "student_id": data.get('student_id'), # เก็บเลขที่
+            "student_id": data.get('student_id'), # เลขที่ (รัน 1-5 ตามห้อง)
             "nickname": data.get('nickname'),
-            "fullname": data.get('fullname'),
-            "grade": data.get('grade'),
+            "fullname": fullname,
+            "grade": grade,
             "disability_type": data.get('disability_type'),
-            "outstanding_subject": data.get('outstanding_subject'), # เก็บวิชาเด่น
-            "note": data.get('note'), # เก็บหมายเหตุ
+            "outstanding_subject": data.get('outstanding_subject'), # วิชาที่โดดเด่น
+            "note": data.get('note'), # หมายเหตุ
             "technique": data.get('technique'),
             "timestamp": ObjectId()
         })
-        return jsonify({"success": True, "message": "บันทึกข้อมูลนักเรียนสำเร็จครับ!"})
+        return jsonify({"success": True, "message": f"บันทึกข้อมูลของ {fullname} สำเร็จครับ!"})
+        
     except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
+        print(f"❌ Add Student Error: {str(e)}")
+        return jsonify({"success": False, "message": f"เกิดข้อผิดพลาด: {str(e)}"}), 500
         
 # -----------------------------------------------------------------------------
 # 7. AI CHAT SYSTEM (GEMINI-3.1-PRO-PREVIEW)
