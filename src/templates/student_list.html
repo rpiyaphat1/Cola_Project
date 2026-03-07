@@ -19,56 +19,80 @@
 </head>
 
 <body class="bg-gray-100 min-h-screen flex flex-col font-sans">
-
     <nav class="bg-indigo-900 text-white shadow-lg mb-8">
         <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center text-sm font-medium">
             <div class="flex items-center space-x-10">
-                <div class="font-bold text-xl uppercase italic border-r border-indigo-700 pr-10">IEP Smart Assistant
-                </div>
+                <div class="font-bold text-xl uppercase italic tracking-tighter border-r border-indigo-700 pr-10">IEP
+                    Smart Assistant</div>
                 <div class="flex space-x-8">
-                    <a href="{{ url_for('chatbot_page') }}">Chatbot AI</a>
+                    <a href="{{ url_for('chatbot_page') }}"
+                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'chatbot_page' %}border-b-2 border-white pb-1{% endif %}">Chatbot
+                        AI</a>
                     <a href="{{ url_for('student_list_page') }}"
-                        class="border-b-2 border-white pb-1">รายชื่อนักเรียน</a>
+                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'student_list_page' %}border-b-2 border-white pb-1{% endif %}">รายชื่อนักเรียน</a>
+                    {% if session['permission'] in ['Admin', 'Super Admin'] %}
+                    <a href="{{ url_for('admin_dashboard') }}"
+                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'admin_dashboard' %}border-b-2 border-white pb-1{% endif %}">Dashboard</a>
+                    <a href="{{ url_for('admin_import_page') }}"
+                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'admin_import_page' %}border-b-2 border-white pb-1{% endif %}">Import</a>
+                    <a href="{{ url_for('register_page') }}"
+                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'register_page' %}border-b-2 border-white pb-1{% endif %}">Register</a>
+                    {% endif %}
                 </div>
             </div>
             <div class="relative">
-                <button onclick="toggleDropdown()" class="bg-indigo-800 px-4 py-2 rounded-xl text-xs font-bold">{{
-                    session.get('displayname', 'User') }}</button>
+                <button onclick="toggleDropdown()"
+                    class="bg-indigo-800 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition flex items-center shadow-md">
+                    {{ session['displayname'] }} <span class="ml-2 text-[10px]">▼</span>
+                </button>
+                <div id="user-menu"
+                    class="absolute right-0 w-48 mt-2 py-2 bg-white rounded-xl shadow-xl hidden z-[150] text-slate-700 border border-slate-100">
+                    <a href="{{ url_for('setting_page') }}"
+                        class="block px-4 py-2 hover:bg-indigo-50 transition text-xs">⚙️ ตั้งค่า</a>
+                    <hr class="my-1 border-slate-100">
+                    <a href="/logout"
+                        class="block px-4 py-2 text-sm text-rose-600 font-bold hover:bg-rose-50 transition">ออกจากระบบ</a>
+                </div>
             </div>
         </div>
     </nav>
 
     <main class="max-w-7xl mx-auto w-full px-6 pb-12">
         <div class="mb-8 flex justify-between items-end">
-            <h2 class="text-3xl font-extrabold text-slate-800 italic">📋 รายชื่อนักเรียน</h2>
-            <div class="bg-white px-6 py-3 rounded-2xl border border-indigo-50 text-right">
-                <p class="text-sm font-bold text-indigo-600">นักเรียนทั้งหมด {{ students|length if students else 0 }}
-                    รายการ</p>
+            <div>
+                <h2 class="text-3xl font-extrabold text-slate-800 uppercase italic">📋 รายชื่อนักเรียน</h2>
+                <p class="text-slate-500 text-sm">จัดการข้อมูลนักเรียนและแผนการสอนเฉพาะบุคคล</p>
+            </div>
+            {% set total_rooms = students | groupby('grade') | length %}
+            <div class="bg-white px-6 py-3 rounded-2xl shadow-sm border border-indigo-50 text-right">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">สรุปข้อมูลระบบ</p>
+                <p class="text-sm font-bold text-indigo-600">นักเรียนทั้งหมด {{ students|length }} รายการ | {{
+                    total_rooms }} ห้องเรียน</p>
             </div>
         </div>
 
-        {% if session.get('permission') == 'Parent' %}
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {% if session['permission'] == 'Parent' %}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {% for student in students %}
             <div class="bg-white rounded-[2rem] shadow-xl p-8 border-t-4 border-indigo-500">
-                <h3 class="text-2xl font-bold mb-2">{{ student.fullname }}</h3>
+                <h3 class="text-2xl font-bold text-slate-800 mb-2">{{ student.fullname }}</h3>
+                <p class="text-rose-500 text-xs font-bold mb-6">📌 {{ student.disability_type or 'บุคคลทั่วไป' }}</p>
                 <button type="button" onclick="handleOpenModal('{{ student.fullname }}')"
-                    class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold">ดูรายละเอียด</button>
+                    class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-sm">ดูรายละเอียด</button>
             </div>
             {% endfor %}
         </div>
         {% else %}
-        <div id="grade-cards-grid" class="grid grid-cols-2 md:grid-cols-6 gap-6">
-            {% if students %}
-            {% set grouped = students | groupby('grade') %}
-            {% for grade, members in grouped %}
+        <div id="grade-cards-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+            {% set grouped_students = students | groupby('grade') %}
+            {% for grade, members in grouped_students %}
             <div onclick="filterByGrade('{{ grade }}')"
-                class="bg-white rounded-[2.5rem] shadow-lg p-10 text-center cursor-pointer hover:bg-indigo-900 hover:text-white transition-all">
-                <span class="text-4xl font-black text-indigo-600">{{ grade }}</span>
-                <p class="text-slate-400 text-[11px] font-bold mt-2">{{ members|length }} คน</p>
+                class="bg-white rounded-[2.5rem] shadow-lg p-10 text-center cursor-pointer hover:bg-indigo-900 hover:text-white transition-all group">
+                <span class="text-4xl font-black text-indigo-600 group-hover:text-white">{{ grade }}</span>
+                <p class="text-slate-400 group-hover:text-indigo-200 text-[11px] font-bold mt-2">{{ members|length }}
+                    นักเรียน</p>
             </div>
             {% endfor %}
-            {% endif %}
         </div>
 
         <div id="student-list-container" class="hidden space-y-6">
@@ -76,7 +100,7 @@
                 กลับหน้าห้องเรียน</button>
             <div class="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden">
                 <div class="p-8 bg-indigo-50/50 border-b">
-                    <h3 id="display-grade-name" class="text-xl font-black text-indigo-900 italic"></h3>
+                    <h3 id="display-grade-name" class="text-xl font-black text-indigo-900 uppercase italic"></h3>
                 </div>
                 <table class="w-full text-left">
                     <thead>
@@ -94,36 +118,39 @@
 
     <div id="detail-modal"
         class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
-        <div class="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden flex flex-col scale-95 transition-all"
+        <div class="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden flex flex-col scale-95 transition-all duration-300"
             id="modal-box">
-            <div class="p-8 border-b flex justify-between items-center bg-indigo-50/30">
+            <div class="p-8 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
                 <h3 class="text-sm font-black text-indigo-900 uppercase italic">Student Insight</h3>
                 <button onclick="closeModal()" class="text-3xl">&times;</button>
             </div>
             <div class="p-10 space-y-4">
                 <p id="m-name" class="text-2xl font-bold text-slate-800"></p>
-                <input type="text" id="m-disability-input" placeholder="ประเภทความบกพร่อง"
+                <input type="text" id="m-disability-input" placeholder="ความบกพร่อง"
                     class="w-full bg-slate-50 border rounded-xl px-4 py-2">
-                <input type="text" id="m-outstanding-input" placeholder="วิชาที่โดดเด่น"
+                <input type="text" id="m-outstanding-input" placeholder="วิชาโดดเด่น"
                     class="w-full bg-slate-50 border rounded-xl px-4 py-2">
                 <textarea id="m-note-input" rows="3" placeholder="หมายเหตุ"
                     class="w-full bg-slate-50 border rounded-2xl px-4 py-3"></textarea>
             </div>
             <div class="p-8 pt-0 flex space-x-3">
-                {% if session.get('permission') != 'Parent' %}
+                {% if session['permission'] != 'Parent' %}
                 <button onclick="saveStudentUpdate()"
                     class="flex-1 bg-emerald-500 text-white py-4 rounded-2xl font-bold text-xs">💾 บันทึก</button>
                 {% endif %}
                 <button onclick="closeModal()"
-                    class="flex-1 bg-slate-100 text-slate-500 py-4 rounded-2xl font-bold text-xs">ปิด</button>
+                    class="flex-1 bg-slate-100 py-4 rounded-2xl font-bold text-xs">ปิด</button>
             </div>
         </div>
     </div>
 
     <script>
-        const userPermission = "{{ session.get('permission', 'User') }}";
+        // ✅ ใช้เทคนิคดึงค่าสิทธิ์มาเป็นตัวแปร JS เพื่อไม่ให้เลขแดงขึ้น
+        const userPermission = "{{ session['permission'] }}";
         // @ts-ignore
-        const allStudents = JSON.parse('{{ students | tojson | safe if students else "[]" }}');
+        const allStudents = JSON.parse('{{ students | tojson | safe }}');
+
+        function toggleDropdown() { document.getElementById('user-menu')?.classList.toggle('hidden'); }
 
         function filterByGrade(grade) {
             const body = document.getElementById('filtered-student-body');
@@ -148,15 +175,21 @@
             const s = allStudents.find(x => x.fullname === fullname);
             if (!s) return;
             document.getElementById('m-name').innerText = s.fullname;
-            document.getElementById('m-disability-input').value = s.disability_type || '';
-            document.getElementById('m-outstanding-input').value = s.outstanding_subject || '';
-            document.getElementById('m-note-input').value = s.note || '';
+            const disability = document.getElementById('m-disability-input');
+            const outstanding = document.getElementById('m-outstanding-input');
+            const note = document.getElementById('m-note-input');
 
+            disability.value = s.disability_type || '';
+            outstanding.value = s.outstanding_subject || '';
+            note.value = s.note || '';
+
+            // ✅ เช็คสิทธิ์ผ่านตัวแปร JS แทน Jinja2 ในนี้ (หายแดงแน่นอน)
             if (userPermission === 'Parent') {
-                document.getElementById('m-disability-input').disabled = true;
-                document.getElementById('m-outstanding-input').disabled = true;
-                document.getElementById('m-note-input').disabled = true;
+                disability.disabled = true;
+                outstanding.disabled = true;
+                note.disabled = true;
             }
+
             document.getElementById('detail-modal')?.classList.remove('hidden');
             setTimeout(() => document.getElementById('modal-box')?.classList.remove('scale-95'), 10);
         }
@@ -182,6 +215,8 @@
             document.getElementById('modal-box')?.classList.add('scale-95');
             setTimeout(() => document.getElementById('detail-modal')?.classList.add('hidden'), 200);
         }
+
+        window.onclick = e => { if (e.target == document.getElementById('detail-modal')) closeModal(); };
     </script>
 </body>
 
