@@ -7,144 +7,216 @@
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .student-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.1);
+        .modal-content::-webkit-scrollbar {
+            width: 6px;
         }
 
-        .filter-active {
-            background-color: #6366f1;
-            color: white;
+        .modal-content::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 10px;
         }
     </style>
 </head>
 
-<body class="bg-slate-50 min-h-screen font-sans">
-
+<body class="bg-gray-100 min-h-screen flex flex-col font-sans">
     <nav class="bg-indigo-900 text-white shadow-lg mb-8">
         <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center text-sm font-medium">
             <div class="flex items-center space-x-10">
-                <div class="font-bold text-xl uppercase italic tracking-tighter border-r border-indigo-700 pr-10">
-                    IEP Smart Assistant
-                </div>
+                <div class="font-bold text-xl uppercase italic tracking-tighter border-r border-indigo-700 pr-10">IEP
+                    Smart Assistant</div>
                 <div class="flex space-x-8">
                     <a href="{{ url_for('chatbot_page') }}"
-                        class="hover:text-indigo-300 transition text-indigo-100">Chatbot AI</a>
+                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'chatbot_page' %}border-b-2 border-white pb-1{% endif %}">Chatbot
+                        AI</a>
                     <a href="{{ url_for('student_list_page') }}"
-                        class="border-b-2 border-white pb-1">รายชื่อนักเรียน</a>
+                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'student_list_page' %}border-b-2 border-white pb-1{% endif %}">รายชื่อนักเรียน</a>
                     {% if session['permission'] in ['Admin', 'Super Admin'] %}
                     <a href="{{ url_for('admin_dashboard') }}"
-                        class="hover:text-indigo-300 transition text-indigo-100">Dashboard</a>
+                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'admin_dashboard' %}border-b-2 border-white pb-1{% endif %}">Dashboard</a>
                     <a href="{{ url_for('admin_import_page') }}"
-                        class="hover:text-indigo-300 transition text-indigo-100">Import</a>
+                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'admin_import_page' %}border-b-2 border-white pb-1{% endif %}">Import</a>
+                    <a href="{{ url_for('register_page') }}"
+                        class="hover:text-indigo-300 transition text-indigo-100 {% if request.endpoint == 'register_page' %}border-b-2 border-white pb-1{% endif %}">Register</a>
                     {% endif %}
                 </div>
             </div>
             <div class="relative">
-                <button class="bg-indigo-800 px-4 py-2 rounded-xl text-xs font-bold flex items-center shadow-md">
-                    {{ session['displayname'] }}
+                <button onclick="toggleDropdown()"
+                    class="bg-indigo-800 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition flex items-center shadow-md">
+                    {{ session['displayname'] }} <span class="ml-2 text-[10px]">▼</span>
                 </button>
+                <div id="user-menu"
+                    class="absolute right-0 w-48 mt-2 py-2 bg-white rounded-xl shadow-xl hidden z-[150] text-slate-700 border border-slate-100">
+                    <a href="{{ url_for('setting_page') }}"
+                        class="block px-4 py-2 hover:bg-indigo-50 transition text-xs">⚙️ ตั้งค่า</a>
+                    <hr class="my-1 border-slate-100">
+                    <a href="/logout"
+                        class="block px-4 py-2 text-sm text-rose-600 font-bold hover:bg-rose-50 transition">ออกจากระบบ</a>
+                </div>
             </div>
         </div>
     </nav>
 
-    <div class="max-w-7xl mx-auto px-8 w-full pb-20">
-        <div class="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
+    <main class="max-w-7xl mx-auto w-full px-6 pb-12">
+        <div class="mb-8 flex justify-between items-end">
             <div>
-                <h1 class="text-3xl font-bold text-slate-800">รายชื่อนักเรียน</h1>
-                <p class="text-slate-500 text-sm mt-1">จัดการและเรียกดูข้อมูลแผนการจัดการศึกษาเฉพาะบุคคล (IEP)</p>
+                <h2 class="text-3xl font-extrabold text-slate-800 uppercase italic">📋 รายชื่อนักเรียน</h2>
+                <p class="text-slate-500 text-sm">จัดการข้อมูลนักเรียนและแผนการสอนเฉพาะบุคคล</p>
             </div>
-
-            <div class="flex flex-col sm:flex-row gap-3">
-                <div class="relative">
-                    <input type="text" id="studentSearch" onkeyup="filterStudents()"
-                        placeholder="ค้นหาชื่อนักเรียน หรือ ชั้นเรียน..."
-                        class="w-full sm:w-80 pl-10 pr-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition">
-                    <span class="absolute left-3 top-3.5 text-slate-400">🔍</span>
-                </div>
-
-                <select id="gradeFilter" onchange="filterStudents()"
-                    class="px-4 py-3 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm bg-white text-sm font-medium">
-                    <option value="">ทุกระดับชั้น</option>
-                    {% for grade in all_grades|sort %}
-                    <option value="{{ grade }}">{{ grade }}</option>
-                    {% endfor %}
-                </select>
+            {% set total_rooms = students | groupby('grade') | length %}
+            <div class="bg-white px-6 py-3 rounded-2xl shadow-sm border border-indigo-50 text-right">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">สรุปข้อมูลระบบ</p>
+                <p class="text-sm font-bold text-indigo-600">นักเรียนทั้งหมด {{ students|length }} รายการ | {{
+                    total_rooms }} ห้องเรียน</p>
             </div>
         </div>
 
-        <div id="studentGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {% if session['permission'] == 'Parent' %}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {% for student in students %}
-            <div class="student-item bg-white rounded-3xl border border-slate-100 shadow-sm p-6 student-card transition-all duration-300"
-                data-name="{{ student.fullname }}" data-grade="{{ student.grade }}">
-
-                <div class="flex items-start justify-between mb-4">
-                    <div
-                        class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center font-bold text-xl">
-                        {{ student.fullname[0] }}
-                    </div>
-                    <span class="bg-slate-100 text-slate-600 text-[10px] px-2.5 py-1 rounded-full font-bold uppercase">
-                        {{ student.grade }}
-                    </span>
-                </div>
-
-                <h3 class="text-lg font-bold text-slate-800 mb-1 truncate">{{ student.fullname }}</h3>
-                <p class="text-slate-400 text-xs font-medium mb-6">รหัสประจำตัว: {{ student.student_id or 'N/A' }}</p>
-
-                <div class="grid grid-cols-2 gap-2">
-                    <a href="/student_info/{{ student.id }}"
-                        class="flex items-center justify-center bg-indigo-600 text-white py-2.5 rounded-xl text-xs font-bold hover:bg-indigo-700 transition">
-                        📊 ข้อมูล IEP
-                    </a>
-                    <a href="/progress_report/{{ student.id }}"
-                        class="flex items-center justify-center bg-slate-100 text-slate-700 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-200 transition">
-                        📝 ผลประเมิน
-                    </a>
-                </div>
+            <div class="bg-white rounded-[2rem] shadow-xl p-8 border-t-4 border-indigo-500">
+                <h3 class="text-2xl font-bold text-slate-800 mb-2">{{ student.fullname }}</h3>
+                <p class="text-rose-500 text-xs font-bold mb-6">📌 {{ student.disability_type or 'บุคคลทั่วไป' }}</p>
+                <button type="button" onclick="handleOpenModal('{{ student.fullname }}')"
+                    class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-sm">ดูรายละเอียด</button>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div id="grade-cards-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+            {% set grouped_students = students | groupby('grade') %}
+            {% for grade, members in grouped_students %}
+            <div onclick="filterByGrade('{{ grade }}')"
+                class="bg-white rounded-[2.5rem] shadow-lg p-10 text-center cursor-pointer hover:bg-indigo-900 hover:text-white transition-all group">
+                <span class="text-4xl font-black text-indigo-600 group-hover:text-white">{{ grade }}</span>
+                <p class="text-slate-400 group-hover:text-indigo-200 text-[11px] font-bold mt-2">{{ members|length }}
+                    นักเรียน</p>
             </div>
             {% endfor %}
         </div>
 
-        <div id="emptyState" class="hidden flex flex-col items-center justify-center py-20">
-            <div class="text-6xl mb-4">🔎</div>
-            <h3 class="text-xl font-bold text-slate-800">ไม่พบรายชื่อนักเรียน</h3>
-            <p class="text-slate-500">ลองเปลี่ยนคำค้นหาหรือตัวกรองระดับชั้น</p>
+        <div id="student-list-container" class="hidden space-y-6">
+            <button onclick="showAllGrades()" class="text-indigo-600 font-black text-xs uppercase">←
+                กลับหน้าห้องเรียน</button>
+            <div class="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden">
+                <div class="p-8 bg-indigo-50/50 border-b">
+                    <h3 id="display-grade-name" class="text-xl font-black text-indigo-900 uppercase italic"></h3>
+                </div>
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">
+                            <th class="px-10 py-6">ชื่อ-นามสกุล</th>
+                            <th class="px-10 py-6 text-right">แอคชั่น</th>
+                        </tr>
+                    </thead>
+                    <tbody id="filtered-student-body" class="divide-y"></tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </main>
+
+    <div id="detail-modal"
+        class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden flex flex-col scale-95 transition-all duration-300"
+            id="modal-box">
+            <div class="p-8 border-b border-slate-100 flex justify-between items-center bg-indigo-50/30">
+                <h3 class="text-sm font-black text-indigo-900 uppercase italic">Student Insight</h3>
+                <button onclick="closeModal()" class="text-3xl">&times;</button>
+            </div>
+            <div class="p-10 space-y-4">
+                <p id="m-name" class="text-2xl font-bold text-slate-800"></p>
+                <input type="text" id="m-disability-input" placeholder="ความบกพร่อง"
+                    class="w-full bg-slate-50 border rounded-xl px-4 py-2">
+                <input type="text" id="m-outstanding-input" placeholder="วิชาโดดเด่น"
+                    class="w-full bg-slate-50 border rounded-xl px-4 py-2">
+                <textarea id="m-note-input" rows="3" placeholder="หมายเหตุ"
+                    class="w-full bg-slate-50 border rounded-2xl px-4 py-3"></textarea>
+            </div>
+            <div class="p-8 pt-0 flex space-x-3">
+                {% if session['permission'] != 'Parent' %}
+                <button onclick="saveStudentUpdate()"
+                    class="flex-1 bg-emerald-500 text-white py-4 rounded-2xl font-bold text-xs">💾 บันทึก</button>
+                {% endif %}
+                <button onclick="closeModal()"
+                    class="flex-1 bg-slate-100 py-4 rounded-2xl font-bold text-xs">ปิด</button>
+            </div>
         </div>
     </div>
 
     <script>
-        function filterStudents() {
-            const searchQuery = document.getElementById('studentSearch').value.toLowerCase();
-            const gradeFilter = document.getElementById('gradeFilter').value;
-            const items = document.getElementsByClassName('student-item');
-            const grid = document.getElementById('studentGrid');
-            const empty = document.getElementById('emptyState');
+        // ✅ ใช้เทคนิคดึงค่าสิทธิ์มาเป็นตัวแปร JS เพื่อไม่ให้เลขแดงขึ้น
+        const userPermission = "{{ session['permission'] }}";
+        // @ts-ignore
+        const allStudents = JSON.parse('{{ students | tojson | safe }}');
 
-            let visibleCount = 0;
+        function toggleDropdown() { document.getElementById('user-menu')?.classList.toggle('hidden'); }
 
-            Array.from(items).forEach(item => {
-                const name = item.getAttribute('data-name').toLowerCase();
-                const grade = item.getAttribute('data-grade');
-
-                const matchesSearch = name.includes(searchQuery) || grade.toLowerCase().includes(searchQuery);
-                const matchesGrade = gradeFilter === "" || grade === gradeFilter;
-
-                if (matchesSearch && matchesGrade) {
-                    item.style.display = "block";
-                    visibleCount++;
-                } else {
-                    item.style.display = "none";
-                }
+        function filterByGrade(grade) {
+            const body = document.getElementById('filtered-student-body');
+            const title = document.getElementById('display-grade-name');
+            if (!body || !title) return;
+            title.innerText = `Classroom: ${grade}`;
+            body.innerHTML = '';
+            allStudents.filter(s => s.grade === grade).forEach(s => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-indigo-50/30';
+                row.innerHTML = `<td class="px-10 py-6 font-bold text-slate-700">${s.fullname}</td>
+                                 <td class="px-10 py-6 text-right">
+                                    <button onclick="handleOpenModal('${s.fullname}')" class="bg-indigo-600 text-white px-4 py-1 rounded-lg text-xs">Update</button>
+                                 </td>`;
+                body.appendChild(row);
             });
-
-            if (visibleCount === 0) {
-                grid.classList.add('hidden');
-                empty.classList.remove('hidden');
-            } else {
-                grid.classList.remove('hidden');
-                empty.classList.add('hidden');
-            }
+            document.getElementById('grade-cards-grid')?.classList.add('hidden');
+            document.getElementById('student-list-container')?.classList.remove('hidden');
         }
+
+        function handleOpenModal(fullname) {
+            const s = allStudents.find(x => x.fullname === fullname);
+            if (!s) return;
+            document.getElementById('m-name').innerText = s.fullname;
+            const disability = document.getElementById('m-disability-input');
+            const outstanding = document.getElementById('m-outstanding-input');
+            const note = document.getElementById('m-note-input');
+
+            disability.value = s.disability_type || '';
+            outstanding.value = s.outstanding_subject || '';
+            note.value = s.note || '';
+
+            // ✅ เช็คสิทธิ์ผ่านตัวแปร JS แทน Jinja2 ในนี้ (หายแดงแน่นอน)
+            if (userPermission === 'Parent') {
+                disability.disabled = true;
+                outstanding.disabled = true;
+                note.disabled = true;
+            }
+
+            document.getElementById('detail-modal')?.classList.remove('hidden');
+            setTimeout(() => document.getElementById('modal-box')?.classList.remove('scale-95'), 10);
+        }
+
+        async function saveStudentUpdate() {
+            const payload = {
+                fullname: document.getElementById('m-name').innerText,
+                disability_type: document.getElementById('m-disability-input').value,
+                outstanding_subject: document.getElementById('m-outstanding-input').value,
+                note: document.getElementById('m-note-input').value
+            };
+            const res = await fetch('/api/update_student_details', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const result = await res.json();
+            if (result.success) { alert(result.message); location.reload(); }
+        }
+
+        function showAllGrades() {
+            document.getElementById('student-list-container')?.classList.add('hidden');
+            document.getElementById('grade-cards-grid')?.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('modal-box')?.classList.add('scale-95');
+            setTimeout(() => document.getElementById('detail-modal')?.classList.add('hidden'), 200);
+        }
+
+        window.onclick = e => { if (e.target == document.getElementById('detail-modal')) closeModal(); };
     </script>
 </body>
 
