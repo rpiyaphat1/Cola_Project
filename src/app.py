@@ -495,36 +495,42 @@ def chatbot_page():
 @app.route('/student_list')
 @login_required
 def student_list_page():
-    """ หน้าแสดงรายชื่อนักเรียน: กรองตามสิทธิ์รายห้อง หรือ รายบุคคล """
+    """ หน้าแสดงรายชื่อนักเรียน: กรองตามสิทธิ์ และแปลง ID กันพัง """
     username = session.get('username')
     permission = session.get('permission')
     
-    # 1. ถ้าเป็น Admin เห็นหมดทั้งโรงเรียน
     if permission in ['Admin', 'Super Admin']:
         students = list(mongo.db.students.find().sort("fullname", 1))
     else:
-        # 2. ดึงรายการสิทธิ์ทั้งหมดที่ User คนนี้มี
         access_list = list(mongo.db.user_access.find({"username": username}))
-        
-        # กรองเอาเฉพาะชื่อห้องที่ได้รับสิทธิ์
         allowed_grades = [a.get('accessible_grade') for a in access_list if a.get('accessible_grade')]
-        # กรองเอาเฉพาะชื่อนักเรียนที่ได้รับสิทธิ์ (สำหรับ Parent)
         allowed_names = [a.get('accessible_student_name') for a in access_list if a.get('accessible_student_name')]
-        
-        # 🔍 ค้นหา: ถ้าอยู่ในห้องที่ระบุ "หรือ" มีชื่อตรงกับที่ได้รับสิทธิ์ ให้แสดงผล
-        query = {
-            "$or": [
-                {"grade": {"$in": allowed_grades}},
-                {"fullname": {"$in": allowed_names}}
-            ]
-        }
+        query = {"$or": [{"grade": {"$in": allowed_grades}}, {"fullname": {"$in": allowed_names}}]}
         students = list(mongo.db.students.find(query).sort("fullname", 1))
         
-    # แปลง ObjectId เป็น String เพื่อให้ส่งไปเป็น JSON ในหน้า HTML ได้
+    # ✅ แปลง ObjectId เป็น String ป้องกัน Error 500 ตอนทำ tojson
     for s in students:
         s['_id'] = str(s['_id'])
         
     return render_template('student_list.html', students=students)
+
+@app.route('/api/update_student_details', methods=['POST'])
+@login_required
+def update_student_details():
+    """ API สำหรับให้ครูอัปเดตข้อมูลนักเรียนรายคน """
+    try:
+        data = request.json
+        fullname = data.get('fullname')
+        update_fields = {
+            "disability_type": data.get('disability_type'),
+            "outstanding_subject": data.get('outstanding_subject'),
+            "note": data.get('note'),
+            "technique": f"วิชาที่บกพร่อง: {data.get('disability_type')} | วิชาที่โดดเด่น: {data.get('outstanding_subject')} | หมายเหตุ: {data.get('note')}"
+        }
+        mongo.db.students.update_one({"fullname": fullname}, {"$set": update_fields})
+        return jsonify({"success": True, "message": "อัปเดตข้อมูลสำเร็จแล้ว!"})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 @app.route('/setting_page')
 @login_required
@@ -539,42 +545,6 @@ def clear_students():
     """ Route พิเศษสำหรับล้างข้อมูลนักเรียนทั้งหมดในกรณีที่มีข้อมูลขยะจำนวนมาก """
     count = mongo.db.students.delete_many({})
     return f"ล้างข้อมูลนักเรียนสำเร็จ! ลบไปทั้งหมด {count.deleted_count} รายการ เพื่อเริ่มนำเข้าข้อมูลใหม่ที่ถูกต้อง"
-
-@app.route('/api/update_student_details', methods=['POST'])
-@login_required
-def update_student_details():
-    """ ให้คุณครูอัปเดตวิชาบกพร่อง/โดดเด่น/หมายเหตุ ได้ทันทีเมื่อเด็กดีขึ้น """
-    try:
-        data = request.json
-        fullname = data.get('fullname')
-        
-        # ค้นหาและอัปเดตข้อมูล
-        # เราอ้างอิงด้วย fullname เพราะเราวางระบบกันชื่อซ้ำไว้แล้ว
-        update_data = {
-            "disability_type": data.get('disability_type'),
-            "outstanding_subject": data.get('outstanding_subject'),
-            "note": data.get('note')
-        }
-        
-        # อัปเดตฟิลด์ technique ด้วยเพื่อให้ AI ได้ข้อมูลล่าสุดไปวิเคราะห์ IEP
-        combined_tech = (
-            f"วิชาที่บกพร่อง: {data.get('disability_type') or '-'} | "
-            f"วิชาที่โดดเด่น: {data.get('outstanding_subject') or '-'} | "
-            f"หมายเหตุ: {data.get('note') or '-'}"
-        )
-        update_data["technique"] = combined_tech
-
-        result = mongo.db.students.update_one(
-            {"fullname": fullname},
-            {"$set": update_data}
-        )
-        
-        if result.modified_count > 0:
-            return jsonify({"success": True, "message": "อัปเดตข้อมูลสำเร็จ! AI ได้รับข้อมูลใหม่แล้วครับ"})
-        return jsonify({"success": False, "message": "ไม่มีการเปลี่ยนแปลงข้อมูล"})
-        
-    except Exception as e:
-        return jsonify({"success": False, "message": str(e)}), 500
 
 # -----------------------------------------------------------------------------
 # START APPLICATION (เริ่มต้นการทำงานของแอปพลิเคชัน)
